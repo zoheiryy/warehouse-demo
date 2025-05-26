@@ -15,7 +15,7 @@ const HomePage = () => {
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
       </div>
-      <h1>مرحباً بكم في نظام إدارة المخازن</h1>
+      <h1>مرحباً بكم </h1>
       <div className="card">
         <button onClick={() => setCount((count) => count + 1)}>
           عدد النقرات: {count}
