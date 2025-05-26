@@ -153,16 +153,15 @@ const TopMenuBar = ({ onWarehouseChange }) => {
             alignItems: 'center',
             padding: '1px'
           }}>
-            <svg width="159" height="18" viewBox="0 0 159 18" fill="none">
-              <path fillRule="evenodd" clipRule="evenodd" d="M0 0.255493H17.3186V17.5084H0V0.255493Z" fill="var(--t-color-text-primary)"/>
-              <path fillRule="evenodd" clipRule="evenodd" d="M15.3691 0.00732422H34.815V17.501H15.3691V0.00732422Z" fill="var(--t-color-text-primary)"/>
-              <path fillRule="evenodd" clipRule="evenodd" d="M35.9441 0H53.1009V17.4958H35.9441V0Z" fill="var(--t-color-text-primary)"/>
-              <path fillRule="evenodd" clipRule="evenodd" d="M55.8257 0.00732422H75.2719V17.501H55.8257V0.00732422Z" fill="var(--t-color-text-primary)"/>
-              <path fillRule="evenodd" clipRule="evenodd" d="M78.2332 0.247437H95.559V17.2755H78.2332V0.247437Z" fill="var(--t-color-text-primary)"/>
-              <path fillRule="evenodd" clipRule="evenodd" d="M99.115 0.247437H116.441V17.2755H99.115V0.247437Z" fill="var(--t-color-text-primary)"/>
-              <path fillRule="evenodd" clipRule="evenodd" d="M118.887 0H138.118V17.4939H118.887V0Z" fill="var(--t-color-text-primary)"/>
-              <path fillRule="evenodd" clipRule="evenodd" d="M141.674 0.247437H159V17.2755H141.674V0.247437Z" fill="var(--t-color-text-primary)"/>
-            </svg>
+            <img 
+              src="/tagaddod.svg" 
+              alt="TAGADDOD Logo" 
+              style={{
+                height: '20px',
+                width: 'auto',
+                filter: 'var(--t-color-text-primary) ? brightness(0) : none'
+              }}
+            />
           </div>
         </div>
 
