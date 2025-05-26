@@ -1,0 +1,8 @@
+import {
+  IconArrowBackUpDouble
+} from "./chunk-QWI3MTI3.js";
+import "./chunk-NPWZZVAS.js";
+import "./chunk-3A6WRQ5K.js";
+export {
+  IconArrowBackUpDouble as default
+};

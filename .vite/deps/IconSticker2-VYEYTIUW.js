@@ -1,0 +1,8 @@
+import {
+  IconSticker2
+} from "./chunk-CKRMWMYV.js";
+import "./chunk-NPWZZVAS.js";
+import "./chunk-3A6WRQ5K.js";
+export {
+  IconSticker2 as default
+};

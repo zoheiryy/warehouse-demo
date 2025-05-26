@@ -1,0 +1,8 @@
+import {
+  IconFileTypographyFilled
+} from "./chunk-MHG4GSBB.js";
+import "./chunk-NPWZZVAS.js";
+import "./chunk-3A6WRQ5K.js";
+export {
+  IconFileTypographyFilled as default
+};

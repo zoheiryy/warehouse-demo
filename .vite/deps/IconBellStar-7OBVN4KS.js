@@ -1,0 +1,8 @@
+import {
+  IconBellStar
+} from "./chunk-TDLHSBGS.js";
+import "./chunk-NPWZZVAS.js";
+import "./chunk-3A6WRQ5K.js";
+export {
+  IconBellStar as default
+};

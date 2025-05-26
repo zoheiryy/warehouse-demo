@@ -1,0 +1,8 @@
+import {
+  IconBrandFigma
+} from "./chunk-FDSKZOUR.js";
+import "./chunk-NPWZZVAS.js";
+import "./chunk-3A6WRQ5K.js";
+export {
+  IconBrandFigma as default
+};

@@ -1,0 +1,486 @@
+/* Navigation Header */
+.navigation-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.navigation-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  height: 4rem;
+  direction: rtl;
+}
+
+/* Logo */
+.navigation-logo {
+  flex-shrink: 0;
+}
+
+.logo-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.logo-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2563eb;
+  transition: color 0.2s ease;
+}
+
+.logo-link:hover .logo-text {
+  color: #1d4ed8;
+}
+
+/* Navigation Menu Root */
+.NavigationMenuRoot {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100vw;
+  z-index: 1;
+}
+
+.NavigationMenuList {
+  display: flex;
+  justify-content: center;
+  background-color: white;
+  padding: 4px;
+  border-radius: 6px;
+  list-style: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin: 0;
+}
+
+/* Navigation Menu Items */
+.NavigationMenuTrigger,
+.NavigationMenuLink {
+  padding: 8px 16px;
+  outline: none;
+  user-select: none;
+  font-weight: 500;
+  line-height: 1;
+  border-radius: 4px;
+  font-size: 15px;
+  color: #374151;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  transition: all 0.2s ease;
+}
+
+.NavigationMenuTrigger:focus,
+.NavigationMenuLink:focus {
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+.NavigationMenuTrigger:hover,
+.NavigationMenuLink:hover {
+  background-color: #f3f4f6;
+  color: #2563eb;
+}
+
+.NavigationMenuTrigger[data-state="open"] {
+  background-color: #e5e7eb;
+  color: #2563eb;
+}
+
+/* Caret Icon */
+.CaretDown {
+  position: relative;
+  color: #6b7280;
+  top: 1px;
+  transition: transform 250ms ease;
+}
+
+.NavigationMenuTrigger[data-state="open"] .CaretDown {
+  transform: rotate(-180deg);
+}
+
+/* Navigation Menu Content */
+.NavigationMenuContent {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  animation-duration: 250ms;
+  animation-timing-function: ease;
+}
+
+.NavigationMenuContent[data-motion="from-start"] {
+  animation-name: enterFromRight;
+}
+
+.NavigationMenuContent[data-motion="from-end"] {
+  animation-name: enterFromLeft;
+}
+
+.NavigationMenuContent[data-motion="to-start"] {
+  animation-name: exitToRight;
+}
+
+.NavigationMenuContent[data-motion="to-end"] {
+  animation-name: exitToLeft;
+}
+
+/* Navigation Menu Grid */
+.NavigationMenuGrid {
+  display: grid;
+  padding: 22px;
+  margin: 0;
+  column-gap: 10px;
+  row-gap: 10px;
+  grid-template-columns: 0.75fr 1fr;
+  list-style: none;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 10px 38px -10px rgba(22, 23, 24, 0.35), 0 10px 20px -15px rgba(22, 23, 24, 0.2);
+}
+
+.NavigationMenuGridItem {
+  grid-row: span 3;
+}
+
+/* Navigation Menu List (for dropdown items) */
+.NavigationMenuContent .NavigationMenuList {
+  display: grid;
+  padding: 22px;
+  margin: 0;
+  column-gap: 10px;
+  row-gap: 10px;
+  grid-template-columns: 1fr;
+  list-style: none;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 10px 38px -10px rgba(22, 23, 24, 0.35), 0 10px 20px -15px rgba(22, 23, 24, 0.2);
+}
+
+/* Navigation Menu Item Links */
+.NavigationMenuItemLink {
+  display: block;
+  outline: none;
+  text-decoration: none;
+  user-select: none;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.NavigationMenuItemLink:focus {
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+.NavigationMenuItemLink:hover {
+  background-color: #f9fafb;
+}
+
+/* Navigation Menu Callout */
+.NavigationMenuCallout {
+  display: flex;
+  justify-content: flex-end;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 6px;
+  padding: 25px;
+  text-decoration: none;
+  outline: none;
+  user-select: none;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.NavigationMenuCallout:focus {
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+.NavigationMenuCallout:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Navigation Menu Item Text */
+.CalloutHeading,
+.NavigationMenuItemHeading {
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 5px;
+  color: inherit;
+}
+
+.CalloutText,
+.NavigationMenuItemText {
+  color: rgba(0, 0, 0, 0.6);
+  line-height: 1.4;
+  font-weight: initial;
+  margin: 0;
+}
+
+.NavigationMenuCallout .CalloutText {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Navigation Menu Indicator */
+.NavigationMenuIndicator {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 10px;
+  top: 100%;
+  overflow: hidden;
+  z-index: 1;
+  transition: width, transform 250ms ease;
+}
+
+.NavigationMenuIndicator[data-state="visible"] {
+  animation: fadeIn 200ms ease;
+}
+
+.NavigationMenuIndicator[data-state="hidden"] {
+  animation: fadeOut 200ms ease;
+}
+
+.Arrow {
+  position: relative;
+  top: 70%;
+  background-color: white;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border-top-left-radius: 2px;
+}
+
+/* Navigation Menu Viewport */
+.ViewportPosition {
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  top: 100%;
+  right: 0;
+  perspective: 2000px;
+}
+
+.NavigationMenuViewport {
+  position: relative;
+  transform-origin: top center;
+  margin-top: 10px;
+  width: 100%;
+  background-color: white;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: hsl(206 22% 7% / 35%) 0px 10px 38px -10px, hsl(206 22% 7% / 20%) 0px 10px 20px -15px;
+  height: var(--radix-navigation-menu-viewport-height);
+  transition: width, height, 300ms ease;
+}
+
+.NavigationMenuViewport[data-state="open"] {
+  animation: scaleIn 200ms ease;
+}
+
+.NavigationMenuViewport[data-state="closed"] {
+  animation: scaleOut 200ms ease;
+}
+
+/* Mobile Menu */
+.mobile-menu-container {
+  display: none;
+}
+
+.mobile-menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid #d1d5db;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mobile-menu-button:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.mobile-menu-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+/* Animations */
+@keyframes enterFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(200px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes enterFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-200px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes exitToRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(200px);
+  }
+}
+
+@keyframes exitToLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-200px);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: rotateX(-30deg) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: rotateX(0deg) scale(1);
+  }
+}
+
+@keyframes scaleOut {
+  from {
+    opacity: 1;
+    transform: rotateX(0deg) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: rotateX(-10deg) scale(0.95);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .NavigationMenuRoot {
+    display: none;
+  }
+  
+  .mobile-menu-container {
+    display: block;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .navigation-header {
+    background: rgba(31, 41, 55, 0.95);
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .NavigationMenuList {
+    background-color: #374151;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+  
+  .NavigationMenuTrigger,
+  .NavigationMenuLink {
+    color: #f3f4f6;
+  }
+  
+  .NavigationMenuTrigger:hover,
+  .NavigationMenuLink:hover {
+    background-color: #4b5563;
+    color: #60a5fa;
+  }
+  
+  .NavigationMenuTrigger[data-state="open"] {
+    background-color: #4b5563;
+    color: #60a5fa;
+  }
+  
+  .NavigationMenuContent .NavigationMenuList,
+  .NavigationMenuGrid {
+    background: #374151;
+    box-shadow: 0 10px 38px -10px rgba(0, 0, 0, 0.5), 0 10px 20px -15px rgba(0, 0, 0, 0.4);
+  }
+  
+  .NavigationMenuItemLink:hover {
+    background-color: #4b5563;
+  }
+  
+  .CalloutText,
+  .NavigationMenuItemText {
+    color: rgba(243, 244, 246, 0.6);
+  }
+  
+  .Arrow {
+    background-color: #374151;
+  }
+  
+  .NavigationMenuViewport {
+    background-color: #374151;
+  }
+  
+  .mobile-menu-button {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f3f4f6;
+  }
+  
+  .mobile-menu-button:hover {
+    background-color: #4b5563;
+    border-color: #6b7280;
+  }
+}

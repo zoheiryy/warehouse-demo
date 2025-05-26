@@ -1,0 +1,8 @@
+import {
+  IconBrandCtemplar
+} from "./chunk-UG36P65N.js";
+import "./chunk-NPWZZVAS.js";
+import "./chunk-3A6WRQ5K.js";
+export {
+  IconBrandCtemplar as default
+};
