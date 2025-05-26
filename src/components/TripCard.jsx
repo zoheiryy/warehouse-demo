@@ -30,6 +30,36 @@ const TripCard = ({ trip, isSelected, onClick }) => {
     }
   };
 
+  const getTripTypeColors = (type) => {
+    switch (type) {
+      case 'B2C': 
+        return {
+          background: '#dbeafe', // Light blue
+          color: '#1d4ed8'       // Blue
+        };
+      case 'B2X': 
+        return {
+          background: '#fed7aa', // Light orange
+          color: '#ea580c'       // Orange
+        };
+      case 'B2B': 
+        return {
+          background: '#dcfce7', // Light green
+          color: '#16a34a'       // Green
+        };
+      case 'TG': 
+        return {
+          background: '#f3e8ff', // Light purple
+          color: '#9333ea'       // Purple
+        };
+      default: 
+        return {
+          background: '#e0f2fe', // Default light blue
+          color: '#0369a1'       // Default blue
+        };
+    }
+  };
+
   return (
     <div
       onClick={onClick}
@@ -79,8 +109,8 @@ const TripCard = ({ trip, isSelected, onClick }) => {
         position: 'absolute',
         top: '12px',
         insetInlineEnd: '12px',
-        background: '#e0f2fe',
-        color: '#0369a1',
+        background: getTripTypeColors(trip.tripType).background,
+        color: getTripTypeColors(trip.tripType).color,
         fontSize: '10px',
         fontWeight: '500',
         padding: '4px 8px',

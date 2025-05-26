@@ -14,6 +14,8 @@ export const getWorkflowType = (trip) => {
     return 'B2C_T1'; // Two steps: Collector → Outside Tank → Inside Tank
   } else if (trip.tripType === 'B2X' && trip.warehouseType === 'T1') {
     return 'B2X_T1'; // Two steps with vehicle weighing
+  } else if (trip.tripType === 'B2X' && trip.warehouseType === 'T3') {
+    return 'B2X_T3'; // Two steps with vehicle weighing for T3 warehouse
   } else if (trip.tripType === 'B2B' && trip.warehouseType === 'T1') {
     return 'B2B_T1'; // Two steps with remainder loop
   }
@@ -95,6 +97,21 @@ export const getStepsForWorkflow = (workflowType, receivingState) => {
           current: receivingState.collectorReceiving.status === 'انتهت' && receivingState.tankReceiving.status !== 'انتهت' 
         }
       ];
+    case 'B2X_T3':
+      return [
+        { 
+          id: 'collector_receiving', 
+          label: 'استلامة مندوب', 
+          completed: receivingState.collectorReceiving.status === 'انتهت', 
+          current: receivingState.collectorReceiving.status !== 'انتهت' 
+        },
+        { 
+          id: 'tank_receiving', 
+          label: 'استلامة خزان', 
+          completed: receivingState.tankReceiving.status === 'انتهت', 
+          current: receivingState.collectorReceiving.status === 'انتهت' && receivingState.tankReceiving.status !== 'انتهت' 
+        }
+      ];
     case 'B2B_T1':
       return [
         { id: 'collector_receiving', label: 'استلام من المندوب', completed: false, current: true },
@@ -131,6 +148,12 @@ export const getInventoryDisplay = (workflowType, trip, receivingState) => {
         { label: 'داخل الخزانات', value: `${receivingState.inventory.insideTanksKg} كجم`, color: '#059669' },
         { label: 'خارج الخزانات', value: `${receivingState.inventory.outsideTanksKg} كجم`, color: '#d97706' }
       ];
+    case 'B2X_T3':
+      return [
+        { label: 'المتوقع', value: `${trip.expectedQuantity} كجم`, color: '#6b7280' },
+        { label: 'داخل الخزانات', value: `${receivingState.inventory.insideTanksKg} كجم`, color: '#059669' },
+        { label: 'خارج الخزانات', value: `${receivingState.inventory.outsideTanksKg} كجم`, color: '#d97706' }
+      ];
     case 'B2B_T1':
       return [
         { label: 'المتوقع', value: `${trip.expectedQuantity} كجم`, color: '#6b7280' },
@@ -159,7 +182,7 @@ export const getActionButtonText = (workflowType, receivingState) => {
     }
   }
   
-  if (workflowType === 'B2X_T1') {
+  if (workflowType === 'B2X_T1' || workflowType === 'B2X_T3') {
     if (receivingState.collectorReceiving.status === 'لم تبدأ') {
       return 'بدء وزن السيارة';
     } else if (receivingState.collectorReceiving.status === 'انتهت' && receivingState.tankReceiving.status === 'لم تبدأ') {
@@ -186,7 +209,7 @@ export const getActionButtonText = (workflowType, receivingState) => {
  * @returns {boolean} - Whether button should be disabled
  */
 export const isActionButtonDisabled = (workflowType, receivingState) => {
-  if (workflowType === 'B2C_T1' || workflowType === 'B2X_T1') {
+  if (workflowType === 'B2C_T1' || workflowType === 'B2X_T1' || workflowType === 'B2X_T3') {
     return receivingState.tankReceiving.status === 'انتهت';
   }
   return false;

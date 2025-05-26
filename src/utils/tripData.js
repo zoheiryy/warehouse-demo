@@ -14,16 +14,117 @@ export const generateDummyTrips = () => {
     { id: 'مكتملة', label: 'مكتملة', color: '#059669' }
   ];
 
-  return Array.from({ length: 12 }, (_, index) => ({
-    id: `4568${index + 1}`,
-    collectorName: collectors[index],
+  // Create specific examples for each trip type to ensure we have all types
+  const specificTrips = [
+    // B2C Examples (UCO receiving enabled)
+    {
+      id: '45681',
+      collectorName: 'مصطفى طارق',
+      tripType: 'B2C',
+      quantityKg: 425,
+      status: statuses[3], // مكتملة
+      warehouseType: 'T1',
+      expectedQuantity: 450,
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      area: 'الرياض - حي النخيل'
+    },
+    {
+      id: '45682',
+      collectorName: 'سارة أحمد',
+      tripType: 'B2C',
+      quantityKg: 608,
+      status: statuses[3], // مكتملة
+      warehouseType: 'T3',
+      expectedQuantity: 600,
+      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      area: 'جدة - حي الصفا'
+    },
+    // Additional B2C example for testing
+    {
+      id: '45688',
+      collectorName: 'نور الدين',
+      tripType: 'B2C',
+      quantityKg: 350,
+      status: statuses[0], // لم تبدأ
+      warehouseType: 'T1',
+      expectedQuantity: 380,
+      createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6 hours ago
+      area: 'الرياض - العليا'
+    },
+    // B2B Examples (functionality disabled for now)
+    {
+      id: '45683',
+      collectorName: 'أحمد محمود',
+      tripType: 'B2B',
+      quantityKg: 850,
+      status: statuses[3], // مكتملة
+      warehouseType: 'T1',
+      expectedQuantity: 900,
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      area: 'الدمام - الكورنيش'
+    },
+    {
+      id: '45684',
+      collectorName: 'محمد علي',
+      tripType: 'B2B',
+      quantityKg: 720,
+      status: statuses[2], // قيد الانتظار
+      warehouseType: 'T1',
+      expectedQuantity: 750,
+      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      area: 'مكة - العزيزية'
+    },
+    // B2X Examples (functionality disabled for now)
+    {
+      id: '45685',
+      collectorName: 'عمر خالد',
+      tripType: 'B2X',
+      quantityKg: 380,
+      status: statuses[1], // بدأت
+      warehouseType: 'T1',
+      expectedQuantity: 400,
+      createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      area: 'الطائف - الحوية'
+    },
+    {
+      id: '45686',
+      collectorName: 'فاطمة محمد',
+      tripType: 'B2X',
+      quantityKg: 520,
+      status: statuses[0], // لم تبدأ
+      warehouseType: 'T1', // Changed from T3 to T1 to support B2X workflow
+      expectedQuantity: 550,
+      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      area: 'المدينة - قباء'
+    },
+    // Additional B2X example for testing
+    {
+      id: '45687',
+      collectorName: 'خديجة عبدالله',
+      tripType: 'B2X',
+      quantityKg: 680,
+      status: statuses[3], // مكتملة
+      warehouseType: 'T1',
+      expectedQuantity: 700,
+      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      area: 'الخبر - الكورنيش'
+    }
+  ];
+
+  // Add some random trips to fill the rest
+  const randomTrips = Array.from({ length: 6 }, (_, index) => ({
+    id: `4568${index + 7}`,
+    collectorName: collectors[index + 6],
     tripType: tripTypes[Math.floor(Math.random() * tripTypes.length)],
-    quantityKg: Math.floor(Math.random() * 500) + 200, // 200-700 kg
+    quantityKg: Math.floor(Math.random() * 500) + 200,
     status: statuses[Math.floor(Math.random() * statuses.length)],
     warehouseType: Math.random() > 0.5 ? 'T1' : 'T3',
     expectedQuantity: Math.floor(Math.random() * 600) + 300,
-    createdAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000) // Last 7 days
+    createdAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
+    area: 'منطقة عشوائية'
   }));
+
+  return [...specificTrips, ...randomTrips];
 };
 
 // Trip status constants for consistency

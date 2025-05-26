@@ -12,7 +12,7 @@ import InventoryTrackingCard from './cards/InventoryTrackingCard';
 import { getWorkflowType } from './utils/workflowUtils';
 import { generateTripLogs, generateUCOReceivingLogs } from './utils/logUtils';
 
-const TripDetailsPanel = ({ trip, onClose }) => {
+const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingState }) => {
   if (!trip) return null;
 
   // Determine workflow type for UCO receiving
@@ -21,35 +21,36 @@ const TripDetailsPanel = ({ trip, onClose }) => {
   // Tab management state
   const [activeTab, setActiveTab] = useState('overview');
 
-  // State management for B2C + T1 receiving workflow
-  const [receivingState, setReceivingState] = useState({
-    // Module 1: Collector Receiving
-    collectorReceiving: {
-      status: 'لم تبدأ', // 'لم تبدأ' | 'بدأت' | 'انتهت'
-      auditedQuantityKg: null,
-      completedAt: null,
-      operator: null,
-      vehicleWeights: null // For B2X workflow
-    },
-    // Module 2: Tank Receiving
-    tankReceiving: {
-      status: 'لم تبدأ', // 'لم تبدأ' | 'بدأت' | 'انتهت'
-      selectedTankId: workflowType === 'B2X_T1' ? 'Receiving_Tank_2' : 'B2C_Receiving_Tank_1',
-      startWeight: null,
-      endWeight: null,
-      netWeight: null,
-      completedAt: null
-    },
-    // Inventory tracking
-    inventory: {
-      withCollectorKg: trip.quantityKg || trip.expectedQuantity || 0,
-      outsideTanksKg: 0,
-      insideTanksKg: 0
-    },
-    // UI state
-    showCollectorModal: false,
-    showTankModal: false
-  });
+  // Get trip type colors
+  const getTripTypeColors = (type) => {
+    switch (type) {
+      case 'B2C': 
+        return {
+          background: '#dbeafe', // Light blue
+          color: '#1d4ed8'       // Blue
+        };
+      case 'B2X': 
+        return {
+          background: '#fed7aa', // Light orange
+          color: '#ea580c'       // Orange
+        };
+      case 'B2B': 
+        return {
+          background: '#dcfce7', // Light green
+          color: '#16a34a'       // Green
+        };
+      case 'TG': 
+        return {
+          background: '#f3e8ff', // Light purple
+          color: '#9333ea'       // Purple
+        };
+      default: 
+        return {
+          background: '#e0f2fe', // Default light blue
+          color: '#0369a1'       // Default blue
+        };
+    }
+  };
 
   // Generate trip logs
   const tripLogs = generateTripLogs(trip, receivingState);
@@ -57,7 +58,7 @@ const TripDetailsPanel = ({ trip, onClose }) => {
 
   // Handle collector receiving completion
   const handleCollectorReceivingComplete = (auditedQuantity, vehicleWeights = null) => {
-    setReceivingState(prev => ({
+    onUpdateReceivingState(prev => ({
       ...prev,
       collectorReceiving: {
         ...prev.collectorReceiving,
@@ -78,7 +79,7 @@ const TripDetailsPanel = ({ trip, onClose }) => {
 
   // Handle tank receiving completion
   const handleTankReceivingComplete = (weights) => {
-    setReceivingState(prev => ({
+    onUpdateReceivingState(prev => ({
       ...prev,
       tankReceiving: {
         ...prev.tankReceiving,
@@ -226,13 +227,29 @@ const TripDetailsPanel = ({ trip, onClose }) => {
                   }}>
                     رحلة رقم {trip.id}
                   </h3>
-                  <p style={{
-                    fontSize: '14px',
-                    color: '#6b7280',
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
                     margin: 0
                   }}>
-                    {trip.tripType} - {trip.warehouseType}
-                  </p>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      background: getTripTypeColors(trip.tripType).background,
+                      color: getTripTypeColors(trip.tripType).color
+                    }}>
+                      {trip.tripType}
+                    </span>
+                    <span style={{
+                      fontSize: '14px',
+                      color: '#6b7280'
+                    }}>
+                      {trip.warehouseType}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -316,15 +333,18 @@ const TripDetailsPanel = ({ trip, onClose }) => {
             <WorkflowStatusCard
               receivingState={receivingState}
               workflowType={workflowType}
-              onStartCollectorReceiving={() => setReceivingState(prev => ({ ...prev, showCollectorModal: true }))}
-              onStartTankReceiving={() => setReceivingState(prev => ({ ...prev, showTankModal: true }))}
+              trip={trip}
+              onStartCollectorReceiving={() => onUpdateReceivingState(prev => ({ ...prev, showCollectorModal: true }))}
+              onStartTankReceiving={() => onUpdateReceivingState(prev => ({ ...prev, showTankModal: true }))}
             />
 
-            {/* Inventory Tracking Card */}
-            <InventoryTrackingCard
-              receivingState={receivingState}
-              workflowType={workflowType}
-            />
+            {/* Inventory Tracking Card - Only show for B2C and B2X trips */}
+            {(trip.tripType === 'B2C' || trip.tripType === 'B2X') && (
+              <InventoryTrackingCard
+                receivingState={receivingState}
+                workflowType={workflowType}
+              />
+            )}
           </>
         )}
 
@@ -351,12 +371,34 @@ const TripDetailsPanel = ({ trip, onClose }) => {
             }}>
               يعرض هذا السجل فقط الأحداث المتعلقة بعمليات استلام الزيت المستعمل من المندوب ونقله إلى الخزانات
             </p>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              {ucoReceivingLogs.map((log, index) => (
+
+            {/* Show disabled message for non-B2C and non-B2X trips */}
+            {trip.tripType !== 'B2C' && trip.tripType !== 'B2X' && (
+              <div style={{
+                padding: '20px',
+                background: '#fef3c7',
+                border: '1px solid #f59e0b',
+                borderRadius: '6px',
+                textAlign: 'center'
+              }}>
+                <p style={{
+                  fontSize: '14px',
+                  color: '#92400e',
+                  margin: 0
+                }}>
+                  سجل استلام الزيت المستعمل متاح فقط لرحلات B2C و B2X
+                </p>
+              </div>
+            )}
+
+            {/* Show logs only for B2C and B2X trips */}
+            {(trip.tripType === 'B2C' || trip.tripType === 'B2X') && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                {ucoReceivingLogs.map((log, index) => (
                 <div key={log.id} style={{
                   display: 'flex',
                   gap: '12px',
@@ -406,37 +448,42 @@ const TripDetailsPanel = ({ trip, onClose }) => {
                   </div>
                 </div>
                               ))}
-              {ucoReceivingLogs.length === 0 && (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '40px 20px',
-                  color: '#6b7280'
-                }}>
-                  <p style={{ margin: 0, fontSize: '14px' }}>
-                    لم تبدأ عمليات الاستلام بعد
-                  </p>
-                </div>
-              )}
-            </div>
+                {ucoReceivingLogs.length === 0 && (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '40px 20px',
+                    color: '#6b7280'
+                  }}>
+                    <p style={{ margin: 0, fontSize: '14px' }}>
+                      لم تبدأ عمليات الاستلام بعد
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Modals */}
-      <CollectorReceivingModal
-        isOpen={receivingState.showCollectorModal}
-        onClose={() => setReceivingState(prev => ({ ...prev, showCollectorModal: false }))}
-        onConfirm={handleCollectorReceivingComplete}
-        trip={trip}
-        workflowType={workflowType}
-      />
+      {/* Modals - Only render for B2C and B2X trips */}
+      {(trip.tripType === 'B2C' || trip.tripType === 'B2X') && (
+        <>
+          <CollectorReceivingModal
+            isOpen={receivingState.showCollectorModal}
+            onClose={() => onUpdateReceivingState(prev => ({ ...prev, showCollectorModal: false }))}
+            onConfirm={handleCollectorReceivingComplete}
+            trip={trip}
+            workflowType={workflowType}
+          />
 
-      <TankReceivingModal
-        isOpen={receivingState.showTankModal}
-        onClose={() => setReceivingState(prev => ({ ...prev, showTankModal: false }))}
-        onConfirm={handleTankReceivingComplete}
-        receivingState={receivingState}
-      />
+          <TankReceivingModal
+            isOpen={receivingState.showTankModal}
+            onClose={() => onUpdateReceivingState(prev => ({ ...prev, showTankModal: false }))}
+            onConfirm={handleTankReceivingComplete}
+            receivingState={receivingState}
+          />
+        </>
+      )}
     </div>
   );
 };

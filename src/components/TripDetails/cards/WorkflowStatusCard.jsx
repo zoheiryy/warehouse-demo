@@ -5,8 +5,11 @@ const WorkflowStatusCard = ({
   receivingState, 
   workflowType, 
   onStartCollectorReceiving, 
-  onStartTankReceiving 
+  onStartTankReceiving,
+  trip
 }) => {
+  // Enable UCO receiving functionality for B2C and B2X trips
+  const isUCOReceivingEnabled = trip?.tripType === 'B2C' || trip?.tripType === 'B2X';
   const getStatusIcon = (status) => {
     switch (status) {
       case 'لم تبدأ':
@@ -61,6 +64,26 @@ const WorkflowStatusCard = ({
         سير عملية الاستلام
       </h3>
 
+      {/* Show disabled message for non-B2C trips */}
+      {!isUCOReceivingEnabled && (
+        <div style={{
+          padding: '12px 16px',
+          background: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '6px',
+          marginBottom: '16px'
+        }}>
+          <p style={{
+            fontSize: '14px',
+            color: '#92400e',
+            margin: 0,
+            textAlign: 'center'
+          }}>
+            وظيفة استلام الزيت المستعمل متاحة فقط لرحلات B2C و B2X
+          </p>
+        </div>
+      )}
+
       {/* Module 1: Collector Receiving */}
       <div style={{
         display: 'flex',
@@ -84,7 +107,7 @@ const WorkflowStatusCard = ({
               color: '#111827',
               margin: 0
             }}>
-              {workflowType === 'B2X_T1' ? 'وزن السيارة واستلام من المندوب' : 'استلام من المندوب'}
+              {(workflowType === 'B2X_T1' || workflowType === 'B2X_T3') ? 'وزن السيارة واستلام من المندوب' : 'استلام من المندوب'}
             </h4>
             {receivingState.collectorReceiving.status === 'انتهت' && (
               <p style={{
@@ -110,7 +133,7 @@ const WorkflowStatusCard = ({
           }}>
             {receivingState.collectorReceiving.status}
           </span>
-          {receivingState.collectorReceiving.status === 'لم تبدأ' && (
+          {receivingState.collectorReceiving.status === 'لم تبدأ' && isUCOReceivingEnabled && (
             <button
               onClick={onStartCollectorReceiving}
               style={{
@@ -181,7 +204,8 @@ const WorkflowStatusCard = ({
             {receivingState.tankReceiving.status}
           </span>
           {receivingState.tankReceiving.status === 'لم تبدأ' && 
-           receivingState.collectorReceiving.status === 'انتهت' && (
+           receivingState.collectorReceiving.status === 'انتهت' && 
+           isUCOReceivingEnabled && (
             <button
               onClick={onStartTankReceiving}
               style={{

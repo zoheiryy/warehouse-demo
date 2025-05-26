@@ -3,11 +3,15 @@ import { IconTruck } from '@tabler/icons-react';
 import TripCard from '../components/TripCard';
 import TripDetailsPanel from '../components/TripDetailsPanel';
 import { generateDummyTrips } from '../utils/tripData';
+import { getWorkflowType } from '../components/TripDetails/utils/workflowUtils';
 
 const SendReceivePage = () => {
   const [trips] = useState(generateDummyTrips());
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  
+  // State management for each trip's receiving state (isolated by trip ID)
+  const [tripStates, setTripStates] = useState(new Map());
 
   useEffect(() => {
     const handleResize = () => {
@@ -18,7 +22,55 @@ const SendReceivePage = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Get or initialize receiving state for a specific trip
+  const getTripReceivingState = (trip) => {
+    if (!tripStates.has(trip.id)) {
+      const workflowType = getWorkflowType(trip);
+      const initialState = {
+        // Module 1: Collector Receiving
+        collectorReceiving: {
+          status: 'لم تبدأ', // 'لم تبدأ' | 'بدأت' | 'انتهت'
+          auditedQuantityKg: null,
+          completedAt: null,
+          operator: null,
+          vehicleWeights: null // For B2X workflow
+        },
+        // Module 2: Tank Receiving
+        tankReceiving: {
+          status: 'لم تبدأ', // 'لم تبدأ' | 'بدأت' | 'انتهت'
+          selectedTankId: workflowType === 'B2X_T1' ? 'Receiving_Tank_2' : 'B2C_Receiving_Tank_1',
+          startWeight: null,
+          endWeight: null,
+          netWeight: null,
+          completedAt: null
+        },
+        // Inventory tracking
+        inventory: {
+          withCollectorKg: trip.quantityKg || trip.expectedQuantity || 0,
+          outsideTanksKg: 0,
+          insideTanksKg: 0
+        },
+        // UI state
+        showCollectorModal: false,
+        showTankModal: false
+      };
+      
+      setTripStates(prev => new Map(prev.set(trip.id, initialState)));
+      return initialState;
+    }
+    return tripStates.get(trip.id);
+  };
 
+  // Update receiving state for a specific trip
+  const updateTripReceivingState = (tripId, updater) => {
+    setTripStates(prev => {
+      const currentState = prev.get(tripId);
+      if (!currentState) return prev;
+      
+      const newState = typeof updater === 'function' ? updater(currentState) : updater;
+      return new Map(prev.set(tripId, newState));
+    });
+  };
 
   const handleTripClick = (trip) => {
     setSelectedTrip(trip);
@@ -125,6 +177,8 @@ const SendReceivePage = () => {
             <TripDetailsPanel
               trip={selectedTrip}
               onClose={handleCloseTripDetails}
+              receivingState={getTripReceivingState(selectedTrip)}
+              onUpdateReceivingState={(updater) => updateTripReceivingState(selectedTrip.id, updater)}
             />
           </div>
         )}
