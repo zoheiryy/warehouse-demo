@@ -8,8 +8,8 @@ const WorkflowStatusCard = ({
   onStartTankReceiving,
   trip
 }) => {
-  // Enable UCO receiving functionality for B2C and B2X trips
-  const isUCOReceivingEnabled = trip?.tripType === 'B2C' || trip?.tripType === 'B2X';
+  // Enable UCO receiving functionality for B2C, B2X, and B2B trips
+  const isUCOReceivingEnabled = trip?.tripType === 'B2C' || trip?.tripType === 'B2X' || trip?.tripType === 'B2B';
   const getStatusIcon = (status) => {
     switch (status) {
       case 'لم تبدأ':
@@ -40,6 +40,33 @@ const WorkflowStatusCard = ({
         return '#059669';
       default:
         return '#6b7280';
+    }
+  };
+
+  const handleActionClick = () => {
+    if (workflowType === 'B2B_T1') {
+      const workflowStep = receivingState.b2bState?.workflowStep || 'first_weighing';
+      
+      switch (workflowStep) {
+        case 'first_weighing':
+        case 'second_weighing':
+        case 'completed':
+          onStartCollectorReceiving();
+          break;
+        case 'tank_receiving':
+          onStartTankReceiving();
+          break;
+        case 'choose_action':
+          // This step is handled within the CollectorReceivingModal
+          onStartCollectorReceiving();
+          break;
+        default:
+          onStartCollectorReceiving();
+      }
+    } else if (receivingState.collectorReceiving.status === 'لم تبدأ') {
+      onStartCollectorReceiving();
+    } else if (receivingState.collectorReceiving.status === 'انتهت' && receivingState.inventory.outsideTanksKg > 0) {
+      onStartTankReceiving();
     }
   };
 
@@ -79,7 +106,7 @@ const WorkflowStatusCard = ({
             margin: 0,
             textAlign: 'center'
           }}>
-            وظيفة استلام الزيت المستعمل متاحة فقط لرحلات B2C و B2X
+            وظيفة استلام الزيت المستعمل متاحة فقط لرحلات B2C و B2X و B2B
           </p>
         </div>
       )}
@@ -107,7 +134,7 @@ const WorkflowStatusCard = ({
               color: '#111827',
               margin: 0
             }}>
-              {(workflowType === 'B2X_T1' || workflowType === 'B2X_T3') ? 'وزن السيارة واستلام من المندوب' : 'استلام من المندوب'}
+              {(workflowType === 'B2X_T1' || workflowType === 'B2X_T3' || workflowType === 'B2B_T1') ? 'وزن السيارة واستلام من المندوب' : 'استلام من المندوب'}
             </h4>
             {receivingState.collectorReceiving.status === 'انتهت' && (
               <p style={{
@@ -135,7 +162,7 @@ const WorkflowStatusCard = ({
           </span>
           {receivingState.collectorReceiving.status === 'لم تبدأ' && isUCOReceivingEnabled && (
             <button
-              onClick={onStartCollectorReceiving}
+              onClick={handleActionClick}
               style={{
                 padding: '4px 8px',
                 background: '#0369a1',
@@ -207,7 +234,7 @@ const WorkflowStatusCard = ({
            receivingState.collectorReceiving.status === 'انتهت' && 
            isUCOReceivingEnabled && (
             <button
-              onClick={onStartTankReceiving}
+              onClick={handleActionClick}
               style={{
                 padding: '4px 8px',
                 background: '#0369a1',

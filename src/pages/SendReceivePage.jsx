@@ -50,6 +50,25 @@ const SendReceivePage = () => {
           outsideTanksKg: 0,
           insideTanksKg: 0
         },
+        // B2B specific state
+        b2bState: {
+          totalFromCollector: 0,
+          cycleCount: 0,
+          transferHistory: [],
+          // New vehicle weighing workflow
+          firstVehicleWeight: null,
+          secondVehicleWeight: null,
+          userChoice: null, // 'tank_first' | 'weighing_first'
+          tankReceivingSession: {
+            isActive: false,
+            startWeight: null,
+            endWeight: null,
+            quantityReceived: 0,
+            startTime: null,
+            endTime: null
+          },
+          workflowStep: 'first_weighing' // 'first_weighing' | 'choose_action' | 'tank_receiving' | 'second_weighing' | 'completed'
+        },
         // UI state
         showCollectorModal: false,
         showTankModal: false

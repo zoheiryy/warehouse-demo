@@ -20,6 +20,8 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
 
   // Tab management state
   const [activeTab, setActiveTab] = useState('overview');
+  const [showCollectorModal, setShowCollectorModal] = useState(false);
+  const [showTankModal, setShowTankModal] = useState(false);
 
   // Get trip type colors
   const getTripTypeColors = (type) => {
@@ -57,45 +59,121 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
   const ucoReceivingLogs = generateUCOReceivingLogs(trip, receivingState);
 
   // Handle collector receiving completion
-  const handleCollectorReceivingComplete = (auditedQuantity, vehicleWeights = null) => {
-    onUpdateReceivingState(prev => ({
-      ...prev,
-      collectorReceiving: {
-        ...prev.collectorReceiving,
-        status: 'انتهت',
-        auditedQuantityKg: auditedQuantity,
-        completedAt: new Date(),
-        operator: 'مشغل المستودع',
-        vehicleWeights: vehicleWeights
-      },
-      inventory: {
-        ...prev.inventory,
-        withCollectorKg: 0,
-        outsideTanksKg: auditedQuantity
-      },
-      showCollectorModal: false
-    }));
+  const handleCollectorReceivingComplete = (quantity, additionalData) => {
+    if (workflowType === 'B2B_T1') {
+      // B2B workflow completion
+      if (additionalData?.netWeight) {
+        // Vehicle weighing completed
+        const netWeight = additionalData.netWeight;
+        const tankReceived = receivingState.b2bState?.tankReceivingSession?.quantityReceived || 0;
+        const outsideQuantity = Math.max(0, netWeight - tankReceived);
+        
+        onUpdateReceivingState(prev => ({
+          ...prev,
+          collectorReceiving: {
+            ...prev.collectorReceiving,
+            status: 'انتهت',
+            actualQuantity: netWeight,
+            completedAt: new Date()
+          },
+          inventory: {
+            ...prev.inventory,
+            withCollectorKg: 0,
+            outsideTanksKg: outsideQuantity,
+            insideTanksKg: prev.inventory.insideTanksKg + tankReceived
+          },
+          b2bState: {
+            ...prev.b2bState,
+            firstVehicleWeight: additionalData.firstWeight,
+            secondVehicleWeight: additionalData.secondWeight,
+            workflowStep: 'completed'
+          }
+        }));
+      }
+    } else {
+      // Original B2C/B2X workflow
+      onUpdateReceivingState(prev => ({
+        ...prev,
+        collectorReceiving: {
+          ...prev.collectorReceiving,
+          status: 'انتهت',
+          actualQuantity: quantity,
+          completedAt: new Date()
+        },
+        inventory: {
+          ...prev.inventory,
+          withCollectorKg: 0,
+          outsideTanksKg: prev.inventory.outsideTanksKg + quantity
+        }
+      }));
+    }
+    
+    setShowCollectorModal(false);
+    
+    // For B2B, check if user chose tank_first and open tank modal
+    if (workflowType === 'B2B_T1' && receivingState.b2bState?.userChoice === 'tank_first' && receivingState.b2bState?.workflowStep === 'tank_receiving') {
+      setTimeout(() => setShowTankModal(true), 100);
+    }
   };
 
   // Handle tank receiving completion
   const handleTankReceivingComplete = (weights) => {
-    onUpdateReceivingState(prev => ({
-      ...prev,
-      tankReceiving: {
-        ...prev.tankReceiving,
-        status: 'انتهت',
-        startWeight: weights.startWeight,
-        endWeight: weights.endWeight,
-        netWeight: weights.netWeight,
-        completedAt: new Date()
-      },
-      inventory: {
-        ...prev.inventory,
-        outsideTanksKg: 0,
-        insideTanksKg: weights.netWeight
-      },
-      showTankModal: false
-    }));
+    const isB2B = trip?.tripType === 'B2B';
+    
+    onUpdateReceivingState(prev => {
+      const newState = {
+        ...prev,
+        tankReceiving: {
+          ...prev.tankReceiving,
+          status: 'انتهت',
+          startWeight: weights.startWeight,
+          endWeight: weights.endWeight,
+          netWeight: weights.netWeight,
+          completedAt: new Date(),
+          selectedTank: weights.selectedTank || prev.tankReceiving.selectedTankId
+        },
+        showTankModal: false
+      };
+
+      if (isB2B) {
+        // B2B: Handle remainder logic
+        const remainderAmount = weights.remainderAmount || 0;
+        newState.inventory = {
+          ...prev.inventory,
+          outsideTanksKg: remainderAmount,
+          insideTanksKg: prev.inventory.insideTanksKg + weights.netWeight
+        };
+        
+        // Update B2B state
+        newState.b2bState = {
+          ...prev.b2bState,
+          cycleCount: prev.b2bState.cycleCount + 1,
+          transferHistory: [
+            ...prev.b2bState.transferHistory,
+            {
+              cycle: prev.b2bState.cycleCount + 1,
+              tank: weights.selectedTank,
+              amount: weights.netWeight,
+              timestamp: new Date()
+            }
+          ]
+        };
+        
+        // If there's remainder, reset tank receiving status for next cycle
+        if (remainderAmount > 0) {
+          newState.tankReceiving.status = 'لم تبدأ';
+        }
+      } else {
+        // B2C/B2X: Transfer all remaining
+        newState.inventory = {
+          ...prev.inventory,
+          outsideTanksKg: 0,
+          insideTanksKg: weights.netWeight
+        };
+      }
+
+      return newState;
+    });
   };
 
   return (
@@ -334,15 +412,16 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
               receivingState={receivingState}
               workflowType={workflowType}
               trip={trip}
-              onStartCollectorReceiving={() => onUpdateReceivingState(prev => ({ ...prev, showCollectorModal: true }))}
-              onStartTankReceiving={() => onUpdateReceivingState(prev => ({ ...prev, showTankModal: true }))}
+              onStartCollectorReceiving={() => setShowCollectorModal(true)}
+              onStartTankReceiving={() => setShowTankModal(true)}
             />
 
-            {/* Inventory Tracking Card - Only show for B2C and B2X trips */}
-            {(trip.tripType === 'B2C' || trip.tripType === 'B2X') && (
+            {/* Inventory Tracking Card - Only show for B2C, B2X, and B2B trips */}
+            {(trip.tripType === 'B2C' || trip.tripType === 'B2X' || trip.tripType === 'B2B') && (
               <InventoryTrackingCard
                 receivingState={receivingState}
                 workflowType={workflowType}
+                trip={trip}
               />
             )}
           </>
@@ -372,8 +451,8 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
               يعرض هذا السجل فقط الأحداث المتعلقة بعمليات استلام الزيت المستعمل من المندوب ونقله إلى الخزانات
             </p>
 
-            {/* Show disabled message for non-B2C and non-B2X trips */}
-            {trip.tripType !== 'B2C' && trip.tripType !== 'B2X' && (
+            {/* Show disabled message for non-B2C, non-B2X, and non-B2B trips */}
+            {trip.tripType !== 'B2C' && trip.tripType !== 'B2X' && trip.tripType !== 'B2B' && (
               <div style={{
                 padding: '20px',
                 background: '#fef3c7',
@@ -386,13 +465,13 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
                   color: '#92400e',
                   margin: 0
                 }}>
-                  سجل استلام الزيت المستعمل متاح فقط لرحلات B2C و B2X
+                  سجل استلام الزيت المستعمل متاح فقط لرحلات B2C و B2X و B2B
                 </p>
               </div>
             )}
 
-            {/* Show logs only for B2C and B2X trips */}
-            {(trip.tripType === 'B2C' || trip.tripType === 'B2X') && (
+            {/* Show logs only for B2C, B2X, and B2B trips */}
+            {(trip.tripType === 'B2C' || trip.tripType === 'B2X' || trip.tripType === 'B2B') && (
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -465,22 +544,27 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
         )}
       </div>
 
-      {/* Modals - Only render for B2C and B2X trips */}
-      {(trip.tripType === 'B2C' || trip.tripType === 'B2X') && (
+      {/* Modals - Only render for B2C, B2X, and B2B trips */}
+      {(trip.tripType === 'B2C' || trip.tripType === 'B2X' || trip.tripType === 'B2B') && (
         <>
           <CollectorReceivingModal
-            isOpen={receivingState.showCollectorModal}
-            onClose={() => onUpdateReceivingState(prev => ({ ...prev, showCollectorModal: false }))}
+            isOpen={showCollectorModal}
+            onClose={() => setShowCollectorModal(false)}
             onConfirm={handleCollectorReceivingComplete}
             trip={trip}
             workflowType={workflowType}
+            receivingState={receivingState}
+            onUpdateReceivingState={onUpdateReceivingState}
           />
 
           <TankReceivingModal
-            isOpen={receivingState.showTankModal}
-            onClose={() => onUpdateReceivingState(prev => ({ ...prev, showTankModal: false }))}
+            isOpen={showTankModal}
+            onClose={() => setShowTankModal(false)}
             onConfirm={handleTankReceivingComplete}
+            trip={trip}
+            workflowType={workflowType}
             receivingState={receivingState}
+            onUpdateReceivingState={onUpdateReceivingState}
           />
         </>
       )}

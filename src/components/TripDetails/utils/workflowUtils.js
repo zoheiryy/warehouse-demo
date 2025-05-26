@@ -113,10 +113,100 @@ export const getStepsForWorkflow = (workflowType, receivingState) => {
         }
       ];
     case 'B2B_T1':
-      return [
-        { id: 'collector_receiving', label: 'استلام من المندوب', completed: false, current: true },
-        { id: 'tank_receiving', label: 'استلام في الخزان', completed: false, current: false }
-      ];
+      const workflowStep = receivingState.b2bState?.workflowStep || 'first_weighing';
+      const userChoice = receivingState.b2bState?.userChoice;
+      
+      switch (workflowStep) {
+        case 'first_weighing':
+          return [
+            { 
+              id: 'first_weighing', 
+              label: 'الوزن الأول للسيارة', 
+              completed: false, 
+              current: true 
+            }
+          ];
+        case 'choose_action':
+          return [
+            { 
+              id: 'first_weighing', 
+              label: 'الوزن الأول للسيارة', 
+              completed: true, 
+              current: false 
+            },
+            { 
+              id: 'choose_action', 
+              label: 'اختيار الإجراء', 
+              completed: false, 
+              current: true 
+            }
+          ];
+        case 'tank_receiving':
+          return [
+            { 
+              id: 'first_weighing', 
+              label: 'الوزن الأول للسيارة', 
+              completed: true, 
+              current: false 
+            },
+            { 
+              id: 'tank_receiving', 
+              label: 'استلام جزئي في الخزان', 
+              completed: false, 
+              current: true 
+            }
+          ];
+        case 'second_weighing':
+          return [
+            { 
+              id: 'first_weighing', 
+              label: 'الوزن الأول للسيارة', 
+              completed: true, 
+              current: false 
+            },
+            ...(userChoice === 'tank_first' ? [{
+              id: 'tank_receiving', 
+              label: 'استلام جزئي في الخزان', 
+              completed: true, 
+              current: false 
+            }] : []),
+            { 
+              id: 'second_weighing', 
+              label: 'الوزن الثاني للسيارة', 
+              completed: false, 
+              current: true 
+            }
+          ];
+        case 'completed':
+          return [
+            { 
+              id: 'first_weighing', 
+              label: 'الوزن الأول للسيارة', 
+              completed: true, 
+              current: false 
+            },
+            ...(userChoice === 'tank_first' ? [{
+              id: 'tank_receiving', 
+              label: 'استلام جزئي في الخزان', 
+              completed: true, 
+              current: false 
+            }] : []),
+            { 
+              id: 'second_weighing', 
+              label: 'الوزن الثاني للسيارة', 
+              completed: true, 
+              current: false 
+            },
+            { 
+              id: 'receive_from_collector', 
+              label: 'استلام من المندوب', 
+              completed: true, 
+              current: false 
+            }
+          ];
+        default:
+          return [];
+      }
     default:
       return [];
   }
@@ -157,8 +247,8 @@ export const getInventoryDisplay = (workflowType, trip, receivingState) => {
     case 'B2B_T1':
       return [
         { label: 'المتوقع', value: `${trip.expectedQuantity} كجم`, color: '#6b7280' },
-        { label: 'داخل الخزانات', value: '0 كجم', color: '#059669' },
-        { label: 'خارج الخزانات', value: '0 كجم', color: '#d97706' }
+        { label: 'داخل الخزانات', value: `${receivingState.inventory.insideTanksKg} كجم`, color: '#059669' },
+        { label: 'خارج الخزانات', value: `${receivingState.inventory.outsideTanksKg} كجم`, color: '#d97706' }
       ];
     default:
       return [];
@@ -192,11 +282,31 @@ export const getActionButtonText = (workflowType, receivingState) => {
     }
   }
   
+  if (workflowType === 'B2B_T1') {
+    const workflowStep = receivingState.b2bState?.workflowStep || 'first_weighing';
+    
+    switch (workflowStep) {
+      case 'first_weighing':
+        return 'بدء الوزن الأول';
+      case 'choose_action':
+        return 'اختيار الإجراء';
+      case 'tank_receiving':
+        if (receivingState.b2bState?.tankReceivingSession?.isActive) {
+          return 'إيقاف الاستلام';
+        }
+        return 'بدء استلام في الخزان';
+      case 'second_weighing':
+        return 'بدء الوزن الثاني';
+      case 'completed':
+        return 'مكتملة ✓';
+      default:
+        return 'بدء العملية';
+    }
+  }
+  
   switch (workflowType) {
     case 'B2C_T3':
       return 'بدء مراجعة الكمية';
-    case 'B2B_T1':
-      return 'بدء وزن السيارة';
     default:
       return 'بدء الاستلام';
   }
@@ -211,6 +321,10 @@ export const getActionButtonText = (workflowType, receivingState) => {
 export const isActionButtonDisabled = (workflowType, receivingState) => {
   if (workflowType === 'B2C_T1' || workflowType === 'B2X_T1' || workflowType === 'B2X_T3') {
     return receivingState.tankReceiving.status === 'انتهت';
+  }
+  if (workflowType === 'B2B_T1') {
+    const workflowStep = receivingState.b2bState?.workflowStep || 'first_weighing';
+    return workflowStep === 'completed';
   }
   return false;
 }; 

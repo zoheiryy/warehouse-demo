@@ -108,6 +108,18 @@ export const generateDummyTrips = () => {
       expectedQuantity: 700,
       createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
       area: 'الخبر - الكورنيش'
+    },
+    // B2B Example for testing UCO receiving with remainder loop
+    {
+      id: '45689',
+      collectorName: 'يوسف إبراهيم',
+      tripType: 'B2B',
+      quantityKg: 1200,
+      status: statuses[0], // لم تبدأ
+      warehouseType: 'T1',
+      expectedQuantity: 1250,
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+      area: 'الرياض - الملز'
     }
   ];
 
