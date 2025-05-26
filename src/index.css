@@ -1,3 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@200;300;400;500;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom CSS for Arabic RTL support */
+[dir="rtl"] {
+  direction: rtl;
+}
+
+/* Spinner animation for loading states */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Apply animation to elements with spin class */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
 :root {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Arial', 'Helvetica';
   line-height: 1.5;
