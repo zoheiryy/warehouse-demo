@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as NavigationMenu from '@radix-ui/react-navigation-menu';
 import { CaretDownIcon, HamburgerMenuIcon } from '@radix-ui/react-icons';
 import './NavigationBar.css';
+import tagaddodLogo from '../assets/tagaddod.svg';
 
 const NavigationBar = () => {
   return (
@@ -10,7 +11,7 @@ const NavigationBar = () => {
         {/* Logo */}
         <div className="navigation-logo">
           <a href="/" className="logo-link">
-            <div className="logo-text">متجرنا</div>
+            <img src={tagaddodLogo} alt="Tagaddod Logo" className="logo-image" />
           </a>
         </div>
 

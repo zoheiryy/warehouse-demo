@@ -37,8 +37,18 @@
   transition: color 0.2s ease;
 }
 
+.logo-image {
+  height: 2.5rem;
+  width: auto;
+  transition: opacity 0.2s ease;
+}
+
 .logo-link:hover .logo-text {
   color: #1d4ed8;
+}
+
+.logo-link:hover .logo-image {
+  opacity: 0.8;
 }
 
 /* Navigation Menu Root */
