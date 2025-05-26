@@ -21,14 +21,29 @@ function App() {
     <div className="app">
       <TopMenuBar />
       <Sidebar onNavigate={setCurrentPage} currentPage={currentPage} />
-      <main className="main-content" style={{
-        marginInlineStart: '64px', // RTL-aware margin for sidebar space on start side
-        transition: 'margin-inline-start 0.3s ease-in-out',
-        minHeight: 'calc(100vh - 56px)', // Account for TopMenuBar height
-        padding: currentPage === 'send-receive' ? '0' : '20px' // No padding for send-receive page
-      }}>
-        {renderMainContent()}
-      </main>
+      {currentPage === 'send-receive' ? (
+        // Full-width layout for SendReceivePage
+        <div style={{
+          position: 'absolute',
+          top: '56px', // Account for TopMenuBar height
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 1
+        }}>
+          {renderMainContent()}
+        </div>
+      ) : (
+        // Regular layout for other pages
+        <main className="main-content" style={{
+          marginInlineStart: '64px', // RTL-aware margin for sidebar space on start side
+          transition: 'margin-inline-start 0.3s ease-in-out',
+          minHeight: 'calc(100vh - 56px)', // Account for TopMenuBar height
+          padding: '20px'
+        }}>
+          {renderMainContent()}
+        </main>
+      )}
     </div>
   )
 }

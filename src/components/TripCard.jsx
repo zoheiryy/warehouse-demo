@@ -39,17 +39,17 @@ const TripCard = ({ trip, isSelected, onClick }) => {
         borderRadius: '12px',
         padding: '16px',
         cursor: 'pointer',
-        transition: 'all 0.2s ease-in-out',
+        transition: 'all 0.3s ease-in-out',
         direction: 'rtl',
         fontFamily: 'Tajawal, sans-serif',
         boxShadow: isSelected ? '0 4px 12px rgba(3, 105, 161, 0.15)' : '0 1px 3px rgba(0, 0, 0, 0.1)',
-        transform: isSelected ? 'translateY(-2px)' : 'translateY(0)',
+        transform: isSelected ? 'translateY(-1px)' : 'translateY(0)',
         position: 'relative'
       }}
       onMouseEnter={(e) => {
         if (!isSelected) {
-          e.target.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-          e.target.style.transform = 'translateY(-1px)';
+          e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.12)';
+          e.target.style.transform = 'translateY(-0.5px)';
         }
       }}
       onMouseLeave={(e) => {
