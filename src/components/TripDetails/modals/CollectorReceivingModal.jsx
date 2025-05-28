@@ -19,6 +19,19 @@ const B2B_STEPS = {
   COMPLETE: 'complete'
 };
 
+// B2X Workflow Steps Definition - UPDATED to match B2B weighing steps
+const B2X_STEPS = {
+  AUDIT: 'audit',
+  FIRST_WEIGHING: 'first_weighing',
+  FIRST_WEIGHING_IN_PROGRESS: 'first_weighing_in_progress',
+  FIRST_WEIGHT_CONFIRM: 'first_weight_confirm',
+  UNLOADING: 'unloading',
+  SECOND_WEIGHING: 'second_weighing',
+  SECOND_WEIGHING_IN_PROGRESS: 'second_weighing_in_progress',
+  SECOND_WEIGHT_CONFIRM: 'second_weight_confirm',
+  COMPLETE: 'complete'
+};
+
 // Helper function to get receiving tank based on channel
 const getReceivingTankForChannel = (tripType) => {
   const tankMapping = {
@@ -34,9 +47,10 @@ const getInitialTripState = (workflowType) => {
   const baseState = {
     auditQuantity: 0,
     isProcessing: false,
-    // B2X Vehicle weighing states
+    // Vehicle weighing states with session tracking
     vehicleWeighingStep: 'start',
     vehicleWeights: null,
+    weighingSessionId: null,
     // B2B states
     b2bStep: B2B_STEPS.AUDIT,
     b2bWeights: null,
@@ -46,11 +60,12 @@ const getInitialTripState = (workflowType) => {
     showConfirmButton: false,
     canConfirmReading: false,
     showRedoButton: false,
-    // Tank receiving states
+    // Tank receiving states with session tracking
     currentTankReading: 0,
     isTankScaleActive: false,
     tankWeights: null,
     pendingTankWeights: null,
+    tankSessionId: null,
     // B2B specific states
     firstWeight: null,
     secondWeight: null,
@@ -207,31 +222,37 @@ const CollectorReceivingModal = ({
     updateTripState({ isProcessing: false });
   };
 
-  // Handle B2X vehicle weighing process (preserve original logic)
+  // ENHANCED: Vehicle weighing process with session tracking for B2X
   const handleVehicleWeighing = async () => {
     if (vehicleWeighingStep === 'start') {
-      updateTripState({ isProcessing: true, vehicleWeighingStep: 'first_weight' });
-      
-      // Simulate first weighing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      const weights = generateVehicleWeights();
       updateTripState({ 
-        vehicleWeights: weights, 
-        isProcessing: false, 
-        vehicleWeighingStep: 'unloading' 
+        b2bStep: B2X_STEPS.FIRST_WEIGHING,
+        vehicleWeighingStep: B2X_STEPS.FIRST_WEIGHING,
+        currentScaleReading: 0,
+        isScaleActive: false,
+        showConfirmButton: false,
+        canConfirmReading: false
       });
-    } else if (vehicleWeighingStep === 'unloading') {
-      updateTripState({ isProcessing: true, vehicleWeighingStep: 'second_weight' });
-      
-      // Simulate unloading and second weighing
-      await new Promise(resolve => setTimeout(resolve, 2500));
-      updateTripState({ isProcessing: false, vehicleWeighingStep: 'complete' });
+      handleB2BFirstWeighing(); // Reuse B2B weighing logic
+    } else if (vehicleWeighingStep === B2X_STEPS.UNLOADING) {
+      updateTripState({ 
+        b2bStep: B2X_STEPS.SECOND_WEIGHING,
+        vehicleWeighingStep: B2X_STEPS.SECOND_WEIGHING,
+        currentScaleReading: 0,
+        isScaleActive: false,
+        showConfirmButton: false,
+        canConfirmReading: false
+      });
+      handleB2BSecondWeighing(); // Reuse B2B weighing logic
     }
   };
 
-  // SIMPLIFIED & FIXED: B2B Car Weighing Process
+  // ENHANCED: Scale reading simulation with session tracking
   const startScaleReading = async (targetWeight) => {
     console.log('Starting scale reading with target:', targetWeight); // Debug log
+    
+    // Get current session ID to ensure we're still in the same session
+    const currentSessionId = getCurrentTripState().weighingSessionId;
     
     // Calculate realistic base reading (not zero)
     const baseReading = Math.floor(targetWeight * 0.75); // Start at 75% of target
@@ -242,7 +263,7 @@ const CollectorReceivingModal = ({
     // Set initial state immediately with a realistic starting weight
     updateTripState({ 
       isScaleActive: true,
-      currentScaleReading: baseReading, // Start from base, not zero
+      currentScaleReading: baseReading,
       showConfirmButton: true,
       showRedoButton: false,
       pendingWeight: null,
@@ -258,6 +279,14 @@ const CollectorReceivingModal = ({
     console.log('Starting simulation from', currentValue, 'to', finalReading); // Debug log
     
     const interval = setInterval(() => {
+      // Check if we're still in the same session
+      const state = getCurrentTripState();
+      if (state.weighingSessionId !== currentSessionId) {
+        console.log('Session changed, stopping simulation'); // Debug log
+        clearInterval(interval);
+        return;
+      }
+      
       step++;
       
       // Calculate new value with smooth progression
@@ -271,7 +300,9 @@ const CollectorReceivingModal = ({
       
       // Always update with a valid reading
       updateTripState({ 
-        currentScaleReading: displayValue 
+        currentScaleReading: displayValue,
+        showConfirmButton: true,
+        canConfirmReading: true
       });
       
       // Stop at final reading
@@ -280,10 +311,12 @@ const CollectorReceivingModal = ({
         clearInterval(interval);
         updateTripState({ 
           currentScaleReading: finalReading,
-          isScaleActive: false
+          isScaleActive: false,
+          showConfirmButton: true,
+          canConfirmReading: true
         });
       }
-    }, 200); // Update every 200ms for smooth animation
+    }, 200);
     
     // Safety cleanup after 3 seconds
     setTimeout(() => {
@@ -291,13 +324,97 @@ const CollectorReceivingModal = ({
       console.log('Safety cleanup triggered'); // Debug log
       // Ensure we always have a final reading
       const currentState = getCurrentTripState();
-      if (!currentState.currentScaleReading || currentState.currentScaleReading === 0) {
-        updateTripState({ 
-          currentScaleReading: finalReading,
-          isScaleActive: false
-        });
+      if (currentState.weighingSessionId === currentSessionId) {
+        if (!currentState.currentScaleReading || currentState.currentScaleReading === 0) {
+          updateTripState({ 
+            currentScaleReading: finalReading,
+            isScaleActive: false,
+            showConfirmButton: true,
+            canConfirmReading: true
+          });
+        }
       }
     }, 3000);
+  };
+
+  // UPDATED: B2X weight confirmation handlers to match B2B style
+  const confirmB2XFirstWeight = () => {
+    const currentReading = getCurrentTripState().currentScaleReading;
+    if (currentReading && currentReading > 0) {
+      updateTripState({
+        firstWeight: currentReading,
+        vehicleWeights: {
+          ...vehicleWeights,
+          firstWeight: currentReading
+        },
+        isScaleActive: false,
+        vehicleWeighingStep: B2X_STEPS.FIRST_WEIGHT_CONFIRM,
+        b2bStep: B2X_STEPS.FIRST_WEIGHT_CONFIRM
+      });
+    }
+  };
+
+  const confirmB2XSecondWeight = () => {
+    const currentReading = getCurrentTripState().currentScaleReading;
+    const firstWeight = vehicleWeights?.firstWeight || 0;
+    
+    if (currentReading && currentReading > 0) {
+      const netWeight = Math.max(0, firstWeight - currentReading);
+      
+      updateTripState({
+        secondWeight: currentReading,
+        vehicleWeights: {
+          firstWeight,
+          secondWeight: currentReading,
+          netWeight
+        },
+        isScaleActive: false,
+        vehicleWeighingStep: B2X_STEPS.SECOND_WEIGHT_CONFIRM,
+        b2bStep: B2X_STEPS.SECOND_WEIGHT_CONFIRM
+      });
+    }
+  };
+
+  const confirmB2XFirstWeightFinal = () => {
+    updateTripState({
+      vehicleWeighingStep: B2X_STEPS.UNLOADING,
+      showConfirmButton: false,
+      canConfirmReading: false
+    });
+  };
+
+  const confirmB2XSecondWeightFinal = () => {
+    updateTripState({
+      vehicleWeighingStep: B2X_STEPS.COMPLETE,
+      showConfirmButton: false,
+      canConfirmReading: false
+    });
+  };
+
+  const redoB2XFirstWeight = () => {
+    updateTripState({
+      vehicleWeighingStep: B2X_STEPS.FIRST_WEIGHING,
+      currentScaleReading: 0,
+      isScaleActive: false,
+      showConfirmButton: false,
+      canConfirmReading: false,
+      vehicleWeights: null
+    });
+  };
+
+  const redoB2XSecondWeight = () => {
+    updateTripState({
+      vehicleWeighingStep: B2X_STEPS.UNLOADING,
+      currentScaleReading: 0,
+      isScaleActive: false,
+      showConfirmButton: false,
+      canConfirmReading: false,
+      vehicleWeights: {
+        ...vehicleWeights,
+        secondWeight: null,
+        netWeight: null
+      }
+    });
   };
 
   // Confirm reading during weighing - IMPROVED
@@ -374,23 +491,26 @@ const CollectorReceivingModal = ({
   // B2B Step 2: Confirm First Weight
   const confirmFirstWeight = () => {
     const firstWt = pendingWeight;
+    const timestamp = new Date();
+    
     updateTripState({ 
       firstWeight: firstWt,
       b2bStep: B2B_STEPS.CHOOSE_ACTION,
       pendingWeight: null,
-      currentScaleReading: firstWt, // Keep the weight visible instead of resetting to 0
+      currentScaleReading: firstWt,
       showConfirmButton: false,
       showRedoButton: false
     });
     
     createLog('vehicle_first_weight_generated', `تم توليد الوزن الأول للسيارة: ${firstWt} كجم`);
     
-    // Update receiving state
+    // Update receiving state with timestamp
     onUpdateReceivingState(prev => ({
       ...prev,
       b2bState: {
         ...prev.b2bState,
         firstVehicleWeight: firstWt,
+        firstWeightTimestamp: timestamp,
         workflowStep: 'choose_action'
       }
     }));
@@ -585,6 +705,7 @@ const CollectorReceivingModal = ({
     const secondWt = pendingWeight;
     const firstWt = firstWeight || receivingState.b2bState.firstVehicleWeight;
     const tankReceived = tankReceivedQuantity || 0;
+    const timestamp = new Date();
     
     // Calculate final quantities
     const calculations = calculateB2BQuantities(firstWt, secondWt, tankReceived);
@@ -596,7 +717,7 @@ const CollectorReceivingModal = ({
       hasRemainder: calculations.hasRemainder,
       b2bStep: calculations.hasRemainder ? B2B_STEPS.REMAINDER_PROCESSING : B2B_STEPS.COMPLETE,
       pendingWeight: null,
-      currentScaleReading: secondWt, // Keep the weight visible instead of resetting to 0
+      currentScaleReading: secondWt,
       showConfirmButton: false,
       showRedoButton: false
     });
@@ -608,21 +729,28 @@ const CollectorReceivingModal = ({
       createLog('remainder_calculated', `كمية متبقية: ${calculations.outsideTankQuantity} كجم`);
     }
     
-    // Update final receiving state
+    // Update final receiving state with timestamp
     onUpdateReceivingState(prev => ({
       ...prev,
       b2bState: {
         ...prev.b2bState,
         secondVehicleWeight: secondWt,
+        secondWeightTimestamp: timestamp,
         workflowStep: calculations.hasRemainder ? 'remainder_processing' : 'completed'
       },
       collectorReceiving: {
         ...prev.collectorReceiving,
         status: calculations.hasRemainder ? 'معالجة المتبقي' : 'انتهت',
         auditedQuantityKg: calculations.receivedFromCollector,
-        completedAt: calculations.hasRemainder ? null : new Date(),
+        completedAt: calculations.hasRemainder ? null : timestamp,
         operator: 'مشغل المستودع',
-        vehicleWeights: { firstWeight: firstWt, secondWeight: secondWt, netWeight: calculations.receivedFromCollector },
+        vehicleWeights: { 
+          firstWeight: firstWt, 
+          secondWeight: secondWt, 
+          netWeight: calculations.receivedFromCollector,
+          firstWeightTimestamp: receivingState.b2bState.firstWeightTimestamp,
+          secondWeightTimestamp: timestamp
+        },
         receivedFromCollector: calculations.receivedFromCollector
       },
       inventory: {
@@ -710,79 +838,237 @@ const CollectorReceivingModal = ({
 
         <div style={{ marginBottom: '20px' }}>
           {isB2X ? (
-            // B2X Vehicle Weighing Interface
+            // B2X Vehicle Weighing Interface - UPDATED to match B2B
             <div>
               {vehicleWeighingStep === 'start' && (
                 <div>
+                  <div style={{
+                    background: '#f3e8ff',
+                    padding: '16px',
+                    borderRadius: '8px',
+                    marginBottom: '16px',
+                    border: '1px solid #9333ea'
+                  }}>
+                    <h4 style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#9333ea',
+                      marginBottom: '12px'
+                    }}>
+                      عملية مراجعة استلام المندوب - B2X
+                    </h4>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between'
+                      }}>
+                        <span style={{ fontSize: '14px', color: '#6b7280' }}>الكمية المتوقعة:</span>
+                        <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
+                          {trip.expectedQuantity} كجم
+                        </span>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between'
+                      }}>
+                        <span style={{ fontSize: '14px', color: '#6b7280' }}>الكمية المجمعة:</span>
+                        <span style={{ fontSize: '14px', fontWeight: '500', color: '#9333ea' }}>
+                          {trip.quantityKg || trip.expectedQuantity} كجم
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                   <p style={{
                     fontSize: '14px',
                     color: '#6b7280',
                     marginBottom: '16px',
                     lineHeight: '1.5'
                   }}>
-                    سيتم وزن السيارة قبل وبعد التفريغ لحساب الكمية الفعلية المستلمة.
+                    ابدأ عملية المراجعة عن طريق وزن السيارة المحملة. سيتم وزن السيارة قبل وبعد التفريغ لحساب الكمية الفعلية.
                   </p>
-                  
+                </div>
+              )}
+
+              {/* First Weighing Process - Using B2B Style */}
+              {(vehicleWeighingStep === B2X_STEPS.FIRST_WEIGHING || 
+                vehicleWeighingStep === B2X_STEPS.FIRST_WEIGHING_IN_PROGRESS) && (
+                <div style={{ textAlign: 'center' }}>
                   <div style={{
-                    background: '#f0f9ff',
-                    padding: '16px',
-                    borderRadius: '8px',
-                    marginBottom: '16px',
-                    border: '1px solid #0369a1'
+                    background: '#f3e8ff',
+                    padding: '20px',
+                    borderRadius: '12px',
+                    marginBottom: '20px',
+                    border: '2px solid #9333ea'
                   }}>
+                    <h4 style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: '#9333ea',
+                      marginBottom: '16px'
+                    }}>
+                      جاري قراءة الميزان - الوزن الأول
+                    </h4>
+                    <div style={{
+                      fontSize: '32px',
+                      fontWeight: '700',
+                      marginBottom: '8px',
+                      fontFamily: 'monospace',
+                      background: '#000',
+                      color: '#00ff00',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: '2px solid #333'
+                    }}>
+                      {currentScaleReading ? `${currentScaleReading.toLocaleString()} كجم` : '-- كجم'}
+                    </div>
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
+                      justifyContent: 'center',
                       gap: '8px',
-                      marginBottom: '8px'
+                      marginTop: '12px'
                     }}>
-                      <IconTruck size={20} style={{ color: '#0369a1' }} />
-                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#0369a1' }}>
-                        الكمية المتوقعة: {trip.expectedQuantity} كجم
+                      {isScaleActive && (
+                        <div style={{
+                          width: '20px',
+                          height: '20px',
+                          border: '3px solid #e5e7eb',
+                          borderTop: '3px solid #9333ea',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }} />
+                      )}
+                      <span style={{
+                        fontSize: '14px',
+                        color: isScaleActive ? '#9333ea' : '#059669',
+                        fontWeight: '500'
+                      }}>
+                        {isScaleActive ? 'جاري القراءة...' : 'القراءة مكتملة'}
                       </span>
                     </div>
-                    <p style={{
-                      fontSize: '14px',
-                      color: '#374151',
-                      margin: 0,
-                      lineHeight: '1.5'
-                    }}>
-                      انقر على "بدء الوزن الأول" لوزن السيارة المحملة.
-                    </p>
+                    
+                    {showConfirmButton && (
+                      <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                        <button
+                          onClick={confirmB2XFirstWeight}
+                          style={{
+                            padding: '10px 20px',
+                            background: '#059669',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}
+                        >
+                          <IconCheck size={16} />
+                          تأكيد القراءة
+                        </button>
+                        <button
+                          onClick={redoB2XFirstWeight}
+                          style={{
+                            padding: '10px 20px',
+                            background: '#f59e0b',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          إعادة القياس
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {vehicleWeighingStep === 'first_weight' && (
-                <div style={{ textAlign: 'center' }}>
+              {vehicleWeighingStep === B2X_STEPS.FIRST_WEIGHT_CONFIRM && (
+                <div>
                   <div style={{
-                    width: '60px',
-                    height: '60px',
-                    border: '4px solid #e5e7eb',
-                    borderTop: '4px solid #0369a1',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                    margin: '0 auto 20px'
-                  }} />
-                  <h4 style={{
-                    fontSize: '16px',
-                    fontWeight: '500',
-                    color: '#111827',
-                    marginBottom: '8px'
+                    background: '#f0fdf4',
+                    padding: '16px',
+                    borderRadius: '8px',
+                    marginBottom: '16px',
+                    border: '1px solid #059669'
                   }}>
-                    جاري الوزن الأول...
-                  </h4>
-                  <p style={{
-                    fontSize: '14px',
-                    color: '#6b7280',
-                    margin: 0
-                  }}>
-                    يرجى الانتظار حتى اكتمال وزن السيارة المحملة
-                  </p>
+                    <h4 style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#059669',
+                      marginBottom: '12px'
+                    }}>
+                      تأكيد الوزن الأول
+                    </h4>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: '700',
+                      textAlign: 'center',
+                      marginBottom: '12px',
+                      fontFamily: 'monospace',
+                      background: '#000',
+                      color: '#00ff00',
+                      padding: '12px',
+                      borderRadius: '8px'
+                    }}>
+                      {vehicleWeights?.firstWeight?.toLocaleString()} كجم
+                    </div>
+                    <p style={{
+                      fontSize: '14px',
+                      color: '#6b7280',
+                      margin: 0,
+                      textAlign: 'center'
+                    }}>
+                      هل تريد تأكيد هذا الوزن أم إعادة القياس؟
+                    </p>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <button
+                      onClick={confirmB2XFirstWeightFinal}
+                      style={{
+                        padding: '12px 24px',
+                        background: '#059669',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      تأكيد الوزن
+                    </button>
+                    <button
+                      onClick={redoB2XFirstWeight}
+                      style={{
+                        padding: '12px 24px',
+                        background: '#f59e0b',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      إعادة القياس
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {vehicleWeighingStep === 'unloading' && vehicleWeights && (
+              {vehicleWeighingStep === B2X_STEPS.UNLOADING && vehicleWeights && (
                 <div>
                   <div style={{
                     background: '#f0fdf4',
@@ -828,36 +1114,180 @@ const CollectorReceivingModal = ({
                 </div>
               )}
 
-              {vehicleWeighingStep === 'second_weight' && (
+              {vehicleWeighingStep === B2X_STEPS.SECOND_WEIGHING && (
                 <div style={{ textAlign: 'center' }}>
                   <div style={{
-                    width: '60px',
-                    height: '60px',
-                    border: '4px solid #e5e7eb',
-                    borderTop: '4px solid #d97706',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                    margin: '0 auto 20px'
-                  }} />
-                  <h4 style={{
-                    fontSize: '16px',
-                    fontWeight: '500',
-                    color: '#111827',
-                    marginBottom: '8px'
+                    background: '#fef3c7',
+                    padding: '20px',
+                    borderRadius: '12px',
+                    marginBottom: '20px',
+                    border: '2px solid #d97706'
                   }}>
-                    جاري الوزن الثاني...
-                  </h4>
-                  <p style={{
-                    fontSize: '14px',
-                    color: '#6b7280',
-                    margin: 0
-                  }}>
-                    يرجى الانتظار حتى اكتمال وزن السيارة الفارغة
-                  </p>
+                    <h4 style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: '#d97706',
+                      marginBottom: '16px'
+                    }}>
+                      جاري قراءة الميزان - الوزن الثاني
+                    </h4>
+                    <div style={{
+                      fontSize: '32px',
+                      fontWeight: '700',
+                      marginBottom: '8px',
+                      fontFamily: 'monospace',
+                      background: '#000',
+                      color: '#00ff00',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: '2px solid #333'
+                    }}>
+                      {currentScaleReading ? `${currentScaleReading.toLocaleString()} كجم` : '-- كجم'}
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      marginTop: '12px'
+                    }}>
+                      {isScaleActive && (
+                        <div style={{
+                          width: '20px',
+                          height: '20px',
+                          border: '3px solid #e5e7eb',
+                          borderTop: '3px solid #d97706',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }} />
+                      )}
+                      <span style={{
+                        fontSize: '14px',
+                        color: isScaleActive ? '#d97706' : '#059669',
+                        fontWeight: '500'
+                      }}>
+                        {isScaleActive ? 'جاري القراءة...' : 'القراءة مكتملة'}
+                      </span>
+                    </div>
+                    
+                    {showConfirmButton && (
+                      <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                        <button
+                          onClick={confirmB2XSecondWeight}
+                          style={{
+                            padding: '10px 20px',
+                            background: '#059669',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}
+                        >
+                          <IconCheck size={16} />
+                          تأكيد القراءة
+                        </button>
+                        <button
+                          onClick={redoB2XSecondWeight}
+                          style={{
+                            padding: '10px 20px',
+                            background: '#f59e0b',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          إعادة القياس
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {vehicleWeighingStep === 'complete' && vehicleWeights && (
+              {vehicleWeighingStep === B2X_STEPS.SECOND_WEIGHT_CONFIRM && (
+                <div>
+                  <div style={{
+                    background: '#f0fdf4',
+                    padding: '16px',
+                    borderRadius: '8px',
+                    marginBottom: '16px',
+                    border: '1px solid #059669'
+                  }}>
+                    <h4 style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#059669',
+                      marginBottom: '12px'
+                    }}>
+                      تأكيد الوزن الثاني
+                    </h4>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: '700',
+                      textAlign: 'center',
+                      marginBottom: '12px',
+                      fontFamily: 'monospace',
+                      background: '#000',
+                      color: '#00ff00',
+                      padding: '12px',
+                      borderRadius: '8px'
+                    }}>
+                      {vehicleWeights?.secondWeight?.toLocaleString()} كجم
+                    </div>
+                    <p style={{
+                      fontSize: '14px',
+                      color: '#6b7280',
+                      margin: 0,
+                      textAlign: 'center'
+                    }}>
+                      هل تريد تأكيد هذا الوزن أم إعادة القياس؟
+                    </p>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <button
+                      onClick={confirmB2XSecondWeightFinal}
+                      style={{
+                        padding: '12px 24px',
+                        background: '#059669',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      تأكيد الوزن
+                    </button>
+                    <button
+                      onClick={redoB2XSecondWeight}
+                      style={{
+                        padding: '12px 24px',
+                        background: '#f59e0b',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      إعادة القياس
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {vehicleWeighingStep === B2X_STEPS.COMPLETE && vehicleWeights && (
                 <div>
                   <div style={{
                     background: '#f0fdf4',
@@ -1943,28 +2373,12 @@ const CollectorReceivingModal = ({
                     gap: '8px'
                   }}
                 >
-                  {isProcessing ? (
-                    <>
-                      <div style={{
-                        width: '16px',
-                        height: '16px',
-                        border: '2px solid #ffffff',
-                        borderTop: '2px solid transparent',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                      جاري المعالجة...
-                    </>
-                  ) : (
-                    <>
-                      <IconScale size={16} />
-                      بدء الوزن الأول
-                    </>
-                  )}
+                  <IconScale size={16} />
+                  بدء الوزن الأول
                 </button>
               )}
 
-              {vehicleWeighingStep === 'unloading' && (
+              {vehicleWeighingStep === B2X_STEPS.UNLOADING && (
                 <button
                   onClick={handleVehicleWeighing}
                   disabled={isProcessing}
@@ -1982,24 +2396,8 @@ const CollectorReceivingModal = ({
                     gap: '8px'
                   }}
                 >
-                  {isProcessing ? (
-                    <>
-                      <div style={{
-                        width: '16px',
-                        height: '16px',
-                        border: '2px solid #ffffff',
-                        borderTop: '2px solid transparent',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                      جاري المعالجة...
-                    </>
-                  ) : (
-                    <>
-                      <IconScale size={16} />
-                      بدء الوزن الثاني
-                    </>
-                  )}
+                  <IconScale size={16} />
+                  بدء الوزن الثاني
                 </button>
               )}
 

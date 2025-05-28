@@ -31,35 +31,39 @@ const SendReceivePage = () => {
       console.log('Setting withCollectorKg to:', withCollectorKg);
       
       const initialState = {
-        // Module 1: Collector Receiving
+        // Module 1: Collector Receiving with session tracking
         collectorReceiving: {
           status: 'لم تبدأ', // 'لم تبدأ' | 'بدأت' | 'انتهت'
           auditedQuantityKg: null,
           completedAt: null,
           operator: null,
-          vehicleWeights: null // For B2X workflow
+          vehicleWeights: null, // For B2X workflow
+          currentSession: null, // Track current active session
+          sessions: [] // History of all sessions
         },
-        // Module 2: Tank Receiving
+        // Module 2: Tank Receiving with session tracking
         tankReceiving: {
           status: 'لم تبدأ', // 'لم تبدأ' | 'بدأت' | 'انتهت'
           selectedTankId: workflowType === 'B2X_T1' ? 'Receiving_Tank_2' : 'B2C_Receiving_Tank_1',
           startWeight: null,
           endWeight: null,
           netWeight: null,
-          completedAt: null
+          completedAt: null,
+          currentSession: null, // Track current active session
+          sessions: [] // History of all sessions
         },
-        // Inventory tracking
+        // Inventory tracking with transaction history
         inventory: {
           withCollectorKg: withCollectorKg,
           outsideTanksKg: 0,
-          insideTanksKg: 0
+          insideTanksKg: 0,
+          transactions: [] // Track all inventory changes with timestamps
         },
-        // B2B specific state
+        // B2B specific state with enhanced tracking
         b2bState: {
           totalFromCollector: 0,
           cycleCount: 0,
           transferHistory: [],
-          // New vehicle weighing workflow
           firstVehicleWeight: null,
           secondVehicleWeight: null,
           userChoice: null, // 'tank_first' | 'weighing_first'
@@ -69,39 +73,106 @@ const SendReceivePage = () => {
             endWeight: null,
             quantityReceived: 0,
             startTime: null,
-            endTime: null
+            endTime: null,
+            sessionId: null // Unique session identifier
           },
-          workflowStep: 'first_weighing' // 'first_weighing' | 'choose_action' | 'tank_receiving' | 'second_weighing' | 'completed'
+          workflowStep: 'first_weighing', // 'first_weighing' | 'choose_action' | 'tank_receiving' | 'second_weighing' | 'completed'
+          sessions: [] // Track all B2B workflow sessions
         },
         // UI state
         showCollectorModal: false,
-        showTankModal: false
+        showTankModal: false,
+        // Metadata
+        lastUpdated: new Date(),
+        createdAt: new Date()
       };
       
       setTripStates(prev => new Map(prev.set(selectedTrip.id, initialState)));
     }
   }, [selectedTrip]);
 
-  // Get receiving state for a specific trip (initialization handled by useEffect)
+  // Enhanced: Get receiving state for a specific trip with session validation
   const getTripReceivingState = (trip) => {
-    // Return existing state or a default state if not yet initialized
-    return tripStates.get(trip.id) || {
-      collectorReceiving: { status: 'لم تبدأ', auditedQuantityKg: null, completedAt: null, operator: null, vehicleWeights: null },
-      tankReceiving: { status: 'لم تبدأ', selectedTankId: 'B2C_Receiving_Tank_1', startWeight: null, endWeight: null, netWeight: null, completedAt: null },
-      inventory: { withCollectorKg: trip.quantityKg || trip.expectedQuantity || 0, outsideTanksKg: 0, insideTanksKg: 0 },
-      b2bState: { totalFromCollector: 0, cycleCount: 0, transferHistory: [], firstVehicleWeight: null, secondVehicleWeight: null, userChoice: null, tankReceivingSession: { isActive: false, startWeight: null, endWeight: null, quantityReceived: 0, startTime: null, endTime: null }, workflowStep: 'first_weighing' },
-      showCollectorModal: false,
-      showTankModal: false
-    };
+    const state = tripStates.get(trip.id);
+    if (!state) {
+      // Return default state with empty sessions
+      return {
+        collectorReceiving: { 
+          status: 'لم تبدأ', 
+          auditedQuantityKg: null, 
+          completedAt: null, 
+          operator: null, 
+          vehicleWeights: null,
+          currentSession: null,
+          sessions: []
+        },
+        tankReceiving: { 
+          status: 'لم تبدأ', 
+          selectedTankId: 'B2C_Receiving_Tank_1', 
+          startWeight: null, 
+          endWeight: null, 
+          netWeight: null, 
+          completedAt: null,
+          currentSession: null,
+          sessions: []
+        },
+        inventory: { 
+          withCollectorKg: trip.quantityKg || trip.expectedQuantity || 0, 
+          outsideTanksKg: 0, 
+          insideTanksKg: 0,
+          transactions: []
+        },
+        b2bState: { 
+          totalFromCollector: 0, 
+          cycleCount: 0, 
+          transferHistory: [], 
+          firstVehicleWeight: null, 
+          secondVehicleWeight: null, 
+          userChoice: null, 
+          tankReceivingSession: { 
+            isActive: false, 
+            startWeight: null, 
+            endWeight: null, 
+            quantityReceived: 0, 
+            startTime: null, 
+            endTime: null,
+            sessionId: null
+          }, 
+          workflowStep: 'first_weighing',
+          sessions: []
+        },
+        showCollectorModal: false,
+        showTankModal: false,
+        lastUpdated: new Date(),
+        createdAt: new Date()
+      };
+    }
+    return state;
   };
 
-  // Update receiving state for a specific trip
+  // Enhanced: Update receiving state for a specific trip with timestamp tracking
   const updateTripReceivingState = (tripId, updater) => {
     setTripStates(prev => {
       const currentState = prev.get(tripId);
       if (!currentState) return prev;
       
       const newState = typeof updater === 'function' ? updater(currentState) : updater;
+      
+      // Add timestamp
+      newState.lastUpdated = new Date();
+      
+      // Add to transaction history if inventory changed
+      if (newState.inventory.withCollectorKg !== currentState.inventory.withCollectorKg ||
+          newState.inventory.outsideTanksKg !== currentState.inventory.outsideTanksKg ||
+          newState.inventory.insideTanksKg !== currentState.inventory.insideTanksKg) {
+        newState.inventory.transactions.push({
+          timestamp: new Date(),
+          withCollectorKg: newState.inventory.withCollectorKg,
+          outsideTanksKg: newState.inventory.outsideTanksKg,
+          insideTanksKg: newState.inventory.insideTanksKg
+        });
+      }
+      
       return new Map(prev.set(tripId, newState));
     });
   };

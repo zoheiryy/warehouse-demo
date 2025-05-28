@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { IconX, IconClock, IconMapPin, IconUser, IconTruck, IconScale } from '@tabler/icons-react';
+import { IconX, IconClock, IconMapPin, IconUser, IconTruck, IconScale, IconTank } from '@tabler/icons-react';
 import { Separator } from '@tagaddod-design/react';
 
 // Import modular components
@@ -11,6 +11,98 @@ import InventoryTrackingCard from './cards/InventoryTrackingCard';
 // Import utilities
 import { getWorkflowType } from './utils/workflowUtils';
 import { generateTripLogs, generateUCOReceivingLogs } from './utils/logUtils';
+
+const LogEntry = ({ log }) => {
+  const getTypeColor = (type) => {
+    switch (type) {
+      case 'success':
+        return '#059669';
+      case 'warning':
+        return '#d97706';
+      case 'info':
+      default:
+        return '#3b82f6';
+    }
+  };
+
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      padding: '12px 0',
+      borderBottom: '1px solid #f3f4f6'
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        <div style={{
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          background: getTypeColor(log.type),
+          flexShrink: 0,
+          marginTop: '6px'
+        }} />
+        <div>
+          <div style={{
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#111827',
+            marginBottom: '4px'
+          }}>
+            {log.action}
+          </div>
+          <div style={{
+            fontSize: '13px',
+            color: '#6b7280'
+          }}>
+            {log.description}
+          </div>
+        </div>
+      </div>
+      <div style={{
+        fontSize: '12px',
+        color: '#6b7280',
+        flexShrink: 0
+      }}>
+        {new Date(log.timestamp).toLocaleTimeString('ar-SA', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })}
+      </div>
+    </div>
+  );
+};
+
+const LogsSection = ({ title, logs }) => {
+  if (!logs || logs.length === 0) return null;
+
+  return (
+    <div style={{
+      marginBottom: '24px'
+    }}>
+      <h3 style={{
+        fontSize: '16px',
+        fontWeight: '600',
+        color: '#111827',
+        marginBottom: '16px'
+      }}>
+        {title}
+      </h3>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        {logs.map((log) => (
+          <LogEntry key={log.id} log={log} />
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingState }) => {
   if (!trip) return null;
@@ -57,6 +149,11 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
   // Generate trip logs
   const tripLogs = generateTripLogs(trip, receivingState);
   const ucoReceivingLogs = generateUCOReceivingLogs(trip, receivingState);
+
+  // Get logs and group them by category
+  const logs = generateUCOReceivingLogs(trip, receivingState);
+  const collectorLogs = logs.filter(log => log.category === 'استلامة مندوب');
+  const tankLogs = logs.filter(log => log.category === 'استلامة خزان');
 
   // Handle collector receiving completion
   const handleCollectorReceivingComplete = (quantity, additionalData) => {
@@ -440,112 +537,30 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
             borderRadius: '8px',
             padding: '20px'
           }}>
-            <h3 style={{
-              fontSize: '16px',
+            <h2 style={{
+              fontSize: '18px',
               fontWeight: '600',
               color: '#111827',
-              marginBottom: '16px'
+              marginBottom: '12px'
             }}>
               سجل أحداث استلام الزيت المستعمل
-            </h3>
+            </h2>
             <p style={{
               fontSize: '14px',
               color: '#6b7280',
-              marginBottom: '20px',
-              lineHeight: '1.5'
+              marginBottom: '24px'
             }}>
               يعرض هذا السجل فقط الأحداث المتعلقة بعمليات استلام الزيت المستعمل من المندوب ونقله إلى الخزانات
             </p>
 
-            {/* Show disabled message for non-B2C, non-B2X, and non-B2B trips */}
-            {trip.tripType !== 'B2C' && trip.tripType !== 'B2X' && trip.tripType !== 'B2B' && (
-              <div style={{
-                padding: '20px',
-                background: '#fef3c7',
-                border: '1px solid #f59e0b',
-                borderRadius: '6px',
-                textAlign: 'center'
-              }}>
-                <p style={{
-                  fontSize: '14px',
-                  color: '#92400e',
-                  margin: 0
-                }}>
-                  سجل استلام الزيت المستعمل متاح فقط لرحلات B2C و B2X و B2B
-                </p>
-              </div>
-            )}
-
-            {/* Show logs only for B2C, B2X, and B2B trips */}
-            {(trip.tripType === 'B2C' || trip.tripType === 'B2X' || trip.tripType === 'B2B') && (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px'
-              }}>
-                {ucoReceivingLogs.map((log, index) => (
-                <div key={log.id} style={{
-                  display: 'flex',
-                  gap: '12px',
-                  paddingBottom: index < tripLogs.length - 1 ? '12px' : '0',
-                  borderBottom: index < tripLogs.length - 1 ? '1px solid #f3f4f6' : 'none'
-                }}>
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    background: log.type === 'success' ? '#059669' : '#0369a1',
-                    borderRadius: '50%',
-                    marginTop: '6px',
-                    flexShrink: 0
-                  }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      marginBottom: '4px'
-                    }}>
-                      <span style={{
-                        fontSize: '14px',
-                        fontWeight: '500',
-                        color: '#111827'
-                      }}>
-                        {log.action}
-                      </span>
-                      <span style={{
-                        fontSize: '12px',
-                        color: '#6b7280'
-                      }}>
-                        {log.timestamp.toLocaleTimeString('ar-SA', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    <p style={{
-                      fontSize: '13px',
-                      color: '#6b7280',
-                      margin: 0,
-                      lineHeight: '1.4'
-                    }}>
-                      {log.description}
-                    </p>
-                  </div>
-                </div>
-                              ))}
-                {ucoReceivingLogs.length === 0 && (
-                  <div style={{
-                    textAlign: 'center',
-                    padding: '40px 20px',
-                    color: '#6b7280'
-                  }}>
-                    <p style={{ margin: 0, fontSize: '14px' }}>
-                      لم تبدأ عمليات الاستلام بعد
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px'
+            }}>
+              <LogsSection title="استلامة خزان" logs={tankLogs} />
+              <LogsSection title="استلامة مندوب" logs={collectorLogs} />
+            </div>
           </div>
         )}
       </div>
