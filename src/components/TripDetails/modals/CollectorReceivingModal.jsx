@@ -239,7 +239,7 @@ const CollectorReceivingModal = ({
     
     console.log('Base reading:', baseReading, 'Final reading:', finalReading); // Debug log
     
-    // Set initial state immediately
+    // Set initial state immediately with a realistic starting weight
     updateTripState({ 
       isScaleActive: true,
       currentScaleReading: baseReading, // Start from base, not zero
@@ -258,24 +258,18 @@ const CollectorReceivingModal = ({
     console.log('Starting simulation from', currentValue, 'to', finalReading); // Debug log
     
     const interval = setInterval(() => {
-      const currentState = getCurrentTripState();
-      
-      // Check if user confirmed early
-      if (currentState.pendingWeight !== null) {
-        console.log('User confirmed early, stopping simulation'); // Debug log
-        clearInterval(interval);
-        return;
-      }
-      
       step++;
+      
+      // Calculate new value with smooth progression
       currentValue = Math.floor(baseReading + (increment * step));
       
-      // Add small fluctuation
-      const fluctuation = Math.floor((Math.random() - 0.5) * 50);
-      const displayValue = Math.max(baseReading, currentValue + fluctuation);
+      // Add small realistic fluctuation (scales typically fluctuate)
+      const fluctuation = Math.floor((Math.random() - 0.5) * 20); // ±10kg fluctuation
+      const displayValue = Math.max(baseReading, Math.min(finalReading + 50, currentValue + fluctuation));
       
       console.log('Step', step, 'Display value:', displayValue); // Debug log
       
+      // Always update with a valid reading
       updateTripState({ 
         currentScaleReading: displayValue 
       });
@@ -289,24 +283,48 @@ const CollectorReceivingModal = ({
           isScaleActive: false
         });
       }
-    }, 200); // Update every 200ms
+    }, 200); // Update every 200ms for smooth animation
     
-    // Safety cleanup after 4 seconds
+    // Safety cleanup after 3 seconds
     setTimeout(() => {
       clearInterval(interval);
       console.log('Safety cleanup triggered'); // Debug log
-    }, 4000);
+      // Ensure we always have a final reading
+      const currentState = getCurrentTripState();
+      if (!currentState.currentScaleReading || currentState.currentScaleReading === 0) {
+        updateTripState({ 
+          currentScaleReading: finalReading,
+          isScaleActive: false
+        });
+      }
+    }, 3000);
   };
 
   // Confirm reading during weighing - IMPROVED
   const confirmCurrentReading = () => {
     const currentReading = getCurrentTripState().currentScaleReading;
-    updateTripState({ 
-      pendingWeight: currentReading,
-      isScaleActive: false,
-      canConfirmReading: false,
-      showRedoButton: true // Show redo after confirmation
-    });
+    const currentStep = getCurrentTripState().b2bStep;
+    
+    // Only proceed if we have a valid reading
+    if (currentReading && currentReading > 0) {
+      updateTripState({ 
+        pendingWeight: currentReading,
+        isScaleActive: false,
+        canConfirmReading: false,
+        showRedoButton: true // Show redo after confirmation
+      });
+      
+      // Transition to the appropriate confirmation step
+      if (currentStep === B2B_STEPS.FIRST_WEIGHING) {
+        updateTripState({ 
+          b2bStep: B2B_STEPS.FIRST_WEIGHT_CONFIRM 
+        });
+      } else if (currentStep === B2B_STEPS.SECOND_WEIGHING_IN_PROGRESS) {
+        updateTripState({ 
+          b2bStep: B2B_STEPS.SECOND_WEIGHT_CONFIRM 
+        });
+      }
+    }
   };
 
   // Redo weight reading
@@ -328,24 +346,29 @@ const CollectorReceivingModal = ({
     console.log('🚀 handleB2BFirstWeighing called'); // Debug log
     console.log('Current step before:', getCurrentTripState().b2bStep); // Debug log
     
-    // FIXED: Immediate state transition, no processing delay
-    updateTripState({ b2bStep: B2B_STEPS.FIRST_WEIGHING });
+    // Generate realistic weights for a loaded truck
+    const targetWeight = Math.floor(Math.random() * (18000 - 12000) + 12000); // 12000-18000 kg
+    const initialWeight = Math.floor(targetWeight * 0.75); // Start at 75% of target
     
-    console.log('State updated to FIRST_WEIGHING'); // Debug log
-    console.log('Current step after update:', getCurrentTripState().b2bStep); // Debug log
+    // FIXED: Immediate state transition with initial weight
+    updateTripState({ 
+      b2bStep: B2B_STEPS.FIRST_WEIGHING,
+      currentScaleReading: initialWeight, // Set initial weight immediately
+      isScaleActive: true,
+      showConfirmButton: true,
+      canConfirmReading: true
+    });
+    
+    console.log('State updated to FIRST_WEIGHING with initial weight:', initialWeight); // Debug log
     
     createLog('collector_receiving_started', 'بدء استلام من المندوب');
     
-    const targetWeight = Math.floor(Math.random() * (18000 - 12000) + 12000); // 12000-18000 kg
     console.log('Starting scale with target weight:', targetWeight); // Debug log
     
     await startScaleReading(targetWeight);
     
-    console.log('Scale reading completed, moving to confirm step'); // Debug log
-    updateTripState({ 
-      b2bStep: B2B_STEPS.FIRST_WEIGHT_CONFIRM 
-    });
-    console.log('Final step:', getCurrentTripState().b2bStep); // Debug log
+    console.log('Scale reading completed, waiting for user confirmation'); // Debug log
+    // Don't automatically transition - wait for user to confirm the reading
   };
 
   // B2B Step 2: Confirm First Weight
@@ -355,7 +378,7 @@ const CollectorReceivingModal = ({
       firstWeight: firstWt,
       b2bStep: B2B_STEPS.CHOOSE_ACTION,
       pendingWeight: null,
-      currentScaleReading: 0,
+      currentScaleReading: firstWt, // Keep the weight visible instead of resetting to 0
       showConfirmButton: false,
       showRedoButton: false
     });
@@ -539,15 +562,22 @@ const CollectorReceivingModal = ({
 
   // B2B Step 6: Handle Second Weighing - FIXED: Remove delay
   const handleB2BSecondWeighing = async () => {
-    // FIXED: Immediate state transition, no processing delay
-    updateTripState({ b2bStep: B2B_STEPS.SECOND_WEIGHING_IN_PROGRESS });
-    
+    // Generate realistic weight for empty vehicle (8-12 tons)
     const targetWeight = Math.floor(Math.random() * (12000 - 8000) + 8000); // 8000-12000 kg
-    await startScaleReading(targetWeight);
+    const initialWeight = Math.floor(targetWeight * 0.75); // Start at 75% of target
     
+    // FIXED: Immediate state transition with initial weight
     updateTripState({ 
-      b2bStep: B2B_STEPS.SECOND_WEIGHT_CONFIRM 
+      b2bStep: B2B_STEPS.SECOND_WEIGHING_IN_PROGRESS,
+      currentScaleReading: initialWeight, // Set initial weight immediately
+      isScaleActive: true,
+      showConfirmButton: true,
+      canConfirmReading: true,
+      showRedoButton: true // Show redo button immediately
     });
+    
+    await startScaleReading(targetWeight);
+    // Don't auto-transition - wait for user to confirm the reading
   };
 
   // B2B Step 7: Confirm Second Weight and Complete Process
@@ -566,7 +596,7 @@ const CollectorReceivingModal = ({
       hasRemainder: calculations.hasRemainder,
       b2bStep: calculations.hasRemainder ? B2B_STEPS.REMAINDER_PROCESSING : B2B_STEPS.COMPLETE,
       pendingWeight: null,
-      currentScaleReading: 0,
+      currentScaleReading: secondWt, // Keep the weight visible instead of resetting to 0
       showConfirmButton: false,
       showRedoButton: false
     });
@@ -968,7 +998,7 @@ const CollectorReceivingModal = ({
                       borderRadius: '8px',
                       border: '2px solid #333'
                     }}>
-                      {(currentScaleReading || 0).toLocaleString()} كجم
+                      {currentScaleReading ? `${currentScaleReading.toLocaleString()} كجم` : '-- كجم'}
                     </div>
                     <div style={{
                       display: 'flex',
@@ -996,9 +1026,9 @@ const CollectorReceivingModal = ({
                       </span>
                     </div>
                     
-                    {/* FIXED: Immediate confirm button */}
+                    {/* FIXED: Show both confirm and redo buttons */}
                     {showConfirmButton && (
-                      <div style={{ marginTop: '16px' }}>
+                      <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
                         <button
                           onClick={confirmCurrentReading}
                           style={{
@@ -1012,12 +1042,26 @@ const CollectorReceivingModal = ({
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            margin: '0 auto'
+                            gap: '8px'
                           }}
                         >
                           <IconCheck size={16} />
                           تأكيد القراءة
+                        </button>
+                        <button
+                          onClick={redoFirstWeight}
+                          style={{
+                            padding: '10px 20px',
+                            background: '#f59e0b',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          إعادة القياس
                         </button>
                       </div>
                     )}
@@ -1054,7 +1098,7 @@ const CollectorReceivingModal = ({
                       padding: '12px',
                       borderRadius: '8px'
                     }}>
-                      {pendingWeight?.toLocaleString()} كجم
+                      {pendingWeight !== null && pendingWeight !== undefined ? `${pendingWeight.toLocaleString()} كجم` : '-- كجم'}
                     </div>
                     <p style={{
                       fontSize: '14px',
@@ -1311,7 +1355,7 @@ const CollectorReceivingModal = ({
                       borderRadius: '8px',
                       border: '2px solid #333'
                     }}>
-                      {(currentTankReading || 0).toLocaleString()} كجم
+                      {currentTankReading ? `${currentTankReading.toLocaleString()} كجم` : '-- كجم'}
                     </div>
                     <div style={{
                       display: 'flex',
@@ -1395,7 +1439,7 @@ const CollectorReceivingModal = ({
                       borderRadius: '8px',
                       border: '2px solid #333'
                     }}>
-                      {(currentTankReading || 0).toLocaleString()} كجم
+                      {currentTankReading ? `${currentTankReading.toLocaleString()} كجم` : '-- كجم'}
                     </div>
                     
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
@@ -1595,7 +1639,7 @@ const CollectorReceivingModal = ({
                       borderRadius: '8px',
                       border: '2px solid #333'
                     }}>
-                      {(currentScaleReading || 0).toLocaleString()} كجم
+                      {currentScaleReading ? `${currentScaleReading.toLocaleString()} كجم` : '-- كجم'}
                     </div>
                     <div style={{
                       display: 'flex',
@@ -1623,9 +1667,9 @@ const CollectorReceivingModal = ({
                       </span>
                     </div>
                     
-                    {/* FIXED: Immediate confirm button */}
+                    {/* FIXED: Show both confirm and redo buttons */}
                     {showConfirmButton && (
-                      <div style={{ marginTop: '16px' }}>
+                      <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
                         <button
                           onClick={confirmCurrentReading}
                           style={{
@@ -1639,12 +1683,26 @@ const CollectorReceivingModal = ({
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            margin: '0 auto'
+                            gap: '8px'
                           }}
                         >
                           <IconCheck size={16} />
                           تأكيد القراءة
+                        </button>
+                        <button
+                          onClick={redoSecondWeight}
+                          style={{
+                            padding: '10px 20px',
+                            background: '#f59e0b',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          إعادة القياس
                         </button>
                       </div>
                     )}
@@ -1681,7 +1739,7 @@ const CollectorReceivingModal = ({
                       padding: '12px',
                       borderRadius: '8px'
                     }}>
-                      {pendingWeight?.toLocaleString()} كجم
+                      {pendingWeight !== null && pendingWeight !== undefined ? `${pendingWeight.toLocaleString()} كجم` : '-- كجم'}
                     </div>
                     <p style={{
                       fontSize: '14px',
