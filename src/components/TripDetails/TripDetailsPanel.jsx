@@ -61,9 +61,11 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
   // Handle collector receiving completion
   const handleCollectorReceivingComplete = (quantity, additionalData) => {
     if (workflowType === 'B2B_T1') {
-      // B2B workflow completion
-      if (additionalData?.netWeight) {
-        // Vehicle weighing completed
+      // B2B workflow completion - handle based on workflow step
+      const currentStep = receivingState.b2bState?.workflowStep;
+      
+      if (currentStep === 'completed' && additionalData?.netWeight) {
+        // Final completion after both weighings
         const netWeight = additionalData.netWeight;
         const tankReceived = receivingState.b2bState?.tankReceivingSession?.quantityReceived || 0;
         const outsideQuantity = Math.max(0, netWeight - tankReceived);
@@ -73,8 +75,11 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
           collectorReceiving: {
             ...prev.collectorReceiving,
             status: 'انتهت',
-            actualQuantity: netWeight,
-            completedAt: new Date()
+            auditedQuantityKg: netWeight,
+            completedAt: new Date(),
+            operator: 'مشغل المستودع',
+            vehicleWeights: additionalData,
+            receivedFromCollector: netWeight
           },
           inventory: {
             ...prev.inventory,
@@ -97,8 +102,9 @@ const TripDetailsPanel = ({ trip, onClose, receivingState, onUpdateReceivingStat
         collectorReceiving: {
           ...prev.collectorReceiving,
           status: 'انتهت',
-          actualQuantity: quantity,
-          completedAt: new Date()
+          auditedQuantityKg: quantity,
+          completedAt: new Date(),
+          operator: 'مشغل المستودع'
         },
         inventory: {
           ...prev.inventory,

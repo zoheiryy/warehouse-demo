@@ -46,22 +46,18 @@ const WorkflowStatusCard = ({
   const handleActionClick = () => {
     if (workflowType === 'B2B_T1') {
       const workflowStep = receivingState.b2bState?.workflowStep || 'first_weighing';
+      const collectorStatus = receivingState.collectorReceiving?.status || 'لم تبدأ';
       
-      switch (workflowStep) {
-        case 'first_weighing':
-        case 'second_weighing':
-        case 'completed':
-          onStartCollectorReceiving();
-          break;
-        case 'tank_receiving':
-          onStartTankReceiving();
-          break;
-        case 'choose_action':
-          // This step is handled within the CollectorReceivingModal
-          onStartCollectorReceiving();
-          break;
-        default:
-          onStartCollectorReceiving();
+      // Handle B2B workflow steps
+      if (collectorStatus === 'لم تبدأ' || workflowStep === 'first_weighing' || workflowStep === 'choose_action' || workflowStep === 'second_weighing') {
+        // Continue with collector receiving process
+        onStartCollectorReceiving();
+      } else if (workflowStep === 'tank_receiving') {
+        // Open tank receiving modal
+        onStartTankReceiving();
+      } else if (collectorStatus === 'انتهت' && receivingState.inventory.outsideTanksKg > 0) {
+        // Start tank receiving for remaining quantity
+        onStartTankReceiving();
       }
     } else if (receivingState.collectorReceiving.status === 'لم تبدأ') {
       onStartCollectorReceiving();

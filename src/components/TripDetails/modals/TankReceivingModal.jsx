@@ -12,81 +12,130 @@ const TankReceivingModal = ({
   receivingState,
   onUpdateReceivingState
 }) => {
-  const [step, setStep] = useState('start'); // 'start' | 'tank-selection' | 'weighing' | 'complete'
+  const [step, setStep] = useState('start'); // 'start' | 'weighing' | 'weighing_in_progress' | 'complete'
   const [weights, setWeights] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedTank, setSelectedTank] = useState('خزان 2'); // Default tank for B2B
   const [transferAmount, setTransferAmount] = useState(0);
+  const [currentTankReading, setCurrentTankReading] = useState(0);
+  const [isTankScaleActive, setIsTankScaleActive] = useState(false);
+  const [pendingTankWeights, setPendingTankWeights] = useState(null);
 
-  // Available tanks for B2B
-  const availableTanks = ['خزان 1', 'خزان 2', 'خزان 3'];
+  // Auto-select receiving tank based on channel
+  const getReceivingTankForChannel = (tripType) => {
+    switch (tripType) {
+      case 'B2X':
+        return 'Receiving_Tank_2';
+      case 'B2B':
+        return 'B2B_Receiving_Tank_1';
+      case 'B2C':
+        return 'B2C_Receiving_Tank_1';
+      default:
+        return 'Default_Receiving_Tank';
+    }
+  };
+
+  const selectedTank = getReceivingTankForChannel(trip.tripType);
   
+  // Available quantity for transfer
+  const availableQuantity = receivingState?.inventory?.outsideTanksKg || 0;
+
   // Check if this is B2B workflow
   const isB2B = workflowType === 'B2B_T1';
   const isB2C = workflowType === 'B2C_T1';
   const isB2X = workflowType === 'B2X_T1' || workflowType === 'B2X_T3';
 
-  // B2B tank receiving session
-  const tankSession = receivingState?.b2bState?.tankReceivingSession;
-  const isSessionActive = tankSession?.isActive || false;
+  // Tank scale reading simulation
+  const startTankScaleReading = async (startWeight, endWeight) => {
+    setIsTankScaleActive(true);
+    setCurrentTankReading(startWeight);
+    
+    // Simulate tank filling with gradual weight increase
+    const duration = 4000; // 4 seconds
+    const steps = 80; // 80 steps for smooth animation
+    const totalIncrease = endWeight - startWeight;
+    const increment = totalIncrease / steps;
+    
+    for (let i = 0; i <= steps; i++) {
+      await new Promise(resolve => setTimeout(resolve, duration / steps));
+      const reading = Math.floor(startWeight + (increment * i) + (Math.random() - 0.5) * 20); // Add fluctuation
+      setCurrentTankReading(Math.max(startWeight, reading));
+    }
+    
+    // Final stabilized reading
+    setCurrentTankReading(endWeight);
+    setPendingTankWeights({ startWeight, endWeight, netWeight: endWeight - startWeight });
+    setIsTankScaleActive(false);
+  };
 
   // B2B tank receiving handlers
   const handleB2BStartReceiving = async () => {
     setIsProcessing(true);
+    setStep('weighing_in_progress');
     
-    // Simulate starting tank receiving
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
+    // Generate weights for tank receiving
     const startWeight = Math.floor(Math.random() * (5000 - 3000) + 3000); // 3000-5000 kg
+    const receiveQuantity = Math.min(availableQuantity, Math.floor(Math.random() * (3000 - 1500) + 1500)); // 1500-3000 kg or available
+    const endWeight = startWeight + receiveQuantity;
     
-    onUpdateReceivingState(prev => ({
-      ...prev,
-      b2bState: {
-        ...prev.b2bState,
-        tankReceivingSession: {
-          isActive: true,
-          startWeight,
-          endWeight: null,
-          quantityReceived: 0,
-          startTime: new Date(),
-          endTime: null
-        }
-      }
-    }));
+    await startTankScaleReading(startWeight, endWeight);
     
     setIsProcessing(false);
+    setStep('complete');
   };
 
-  const handleB2BStopReceiving = async () => {
-    setIsProcessing(true);
-    
-    // Simulate stopping tank receiving
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const endWeight = Math.floor(Math.random() * (8000 - 6000) + 6000); // 6000-8000 kg
-    const quantityReceived = endWeight - tankSession.startWeight;
+  const confirmTankReceiving = () => {
+    const { startWeight, endWeight, netWeight } = pendingTankWeights;
     
     onUpdateReceivingState(prev => ({
       ...prev,
       b2bState: {
         ...prev.b2bState,
         tankReceivingSession: {
-          ...prev.b2bState.tankReceivingSession,
           isActive: false,
+          startWeight,
           endWeight,
-          quantityReceived,
+          quantityReceived: netWeight,
+          startTime: new Date(Date.now() - 4000), // 4 seconds ago
           endTime: new Date()
         },
         workflowStep: 'second_weighing'
       },
       inventory: {
         ...prev.inventory,
-        insideTanksKg: prev.inventory.insideTanksKg + quantityReceived
+        outsideTanksKg: Math.max(0, prev.inventory.outsideTanksKg - netWeight),
+        insideTanksKg: prev.inventory.insideTanksKg + netWeight
+      },
+      tankReceiving: {
+        ...prev.tankReceiving,
+        status: 'انتهت',
+        startWeight,
+        endWeight,
+        netWeight,
+        selectedTankId: selectedTank,
+        completedAt: new Date()
       }
     }));
     
-    setIsProcessing(false);
-    onClose(); // Close modal after stopping
+    onConfirm({
+      startWeight,
+      endWeight,
+      netWeight,
+      selectedTank,
+      remainderAmount: Math.max(0, availableQuantity - netWeight)
+    });
+  };
+
+  const redoTankReceiving = () => {
+    setStep('start');
+    setPendingTankWeights(null);
+    setCurrentTankReading(0);
+  };
+
+  // B2C/B2X handlers
+  const handleStartTransfer = () => {
+    if (transferAmount > 0) {
+      handleStartWeighing();
+    }
   };
 
   const handleStartWeighing = async () => {
@@ -100,14 +149,6 @@ const TankReceivingModal = ({
     setWeights(generatedWeights);
     setIsProcessing(false);
     setStep('complete');
-  };
-
-  const handleTankSelection = () => {
-    if (isB2B) {
-      setStep('tank-selection');
-    } else {
-      handleStartWeighing();
-    }
   };
 
   const handleConfirmTransfer = async () => {
@@ -183,7 +224,7 @@ const TankReceivingModal = ({
         {step === 'start' && (
           <div>
             {isB2B ? (
-              // B2B Tank Receiving Session Interface
+              // B2B Tank Receiving Interface
               <div>
                 <div style={{
                   background: '#f3e8ff',
@@ -192,16 +233,38 @@ const TankReceivingModal = ({
                   marginBottom: '20px',
                   border: '1px solid #9333ea'
                 }}>
+                  <h4 style={{
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    color: '#9333ea',
+                    marginBottom: '12px'
+                  }}>
+                    بدء الاستلام في الخزان
+                  </h4>
                   <div style={{
                     display: 'flex',
-                    alignItems: 'center',
+                    flexDirection: 'column',
                     gap: '8px',
-                    marginBottom: '8px'
+                    marginBottom: '12px'
                   }}>
-                    <IconScale size={20} style={{ color: '#9333ea' }} />
-                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#9333ea' }}>
-                      استلام في خزان الاستقبال 2
-                    </span>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between'
+                    }}>
+                      <span style={{ fontSize: '14px', color: '#6b7280' }}>الخزان المحدد:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#9333ea' }}>
+                        {selectedTank}
+                      </span>
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between'
+                    }}>
+                      <span style={{ fontSize: '14px', color: '#6b7280' }}>الكمية المتاحة:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
+                        {availableQuantity.toLocaleString()} كجم
+                      </span>
+                    </div>
                   </div>
                   <p style={{
                     fontSize: '14px',
@@ -209,94 +272,28 @@ const TankReceivingModal = ({
                     margin: 0,
                     lineHeight: '1.5'
                   }}>
-                    {isSessionActive 
-                      ? 'جلسة الاستلام نشطة. يمكنك إيقاف الاستلام عند الانتهاء.'
-                      : 'ابدأ جلسة استلام في الخزان لتسجيل الكمية المستلمة.'
-                    }
+                    سيتم اختيار الخزان تلقائياً بناءً على نوع الرحلة. انقر على "بدء الاستلام" لبدء عملية النقل إلى الخزان.
                   </p>
                 </div>
 
-                {isSessionActive && tankSession && (
+                {availableQuantity === 0 && (
                   <div style={{
-                    background: '#f0fdf4',
+                    background: '#fef3c7',
                     padding: '16px',
                     borderRadius: '8px',
-                    marginBottom: '20px',
-                    border: '1px solid #059669'
+                    border: '1px solid #f59e0b',
+                    marginBottom: '16px'
                   }}>
-                    <h4 style={{
+                    <p style={{
                       fontSize: '14px',
-                      fontWeight: '500',
-                      color: '#059669',
-                      marginBottom: '12px'
+                      color: '#92400e',
+                      margin: 0,
+                      textAlign: 'center'
                     }}>
-                      جلسة الاستلام النشطة:
-                    </h4>
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px'
-                    }}>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between'
-                      }}>
-                        <span style={{ fontSize: '14px', color: '#6b7280' }}>وزن البداية:</span>
-                        <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
-                          {tankSession.startWeight?.toLocaleString()} كجم
-                        </span>
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between'
-                      }}>
-                        <span style={{ fontSize: '14px', color: '#6b7280' }}>وقت البداية:</span>
-                        <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
-                          {tankSession.startTime ? new Date(tankSession.startTime).toLocaleTimeString('ar-SA') : '-'}
-                        </span>
-                      </div>
-                    </div>
+                      لا توجد كمية متاحة للاستلام في الخزان
+                    </p>
                   </div>
                 )}
-
-                <button
-                  onClick={isSessionActive ? handleB2BStopReceiving : handleB2BStartReceiving}
-                  disabled={isProcessing}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    background: isProcessing ? '#9ca3af' : (isSessionActive ? '#dc2626' : '#059669'),
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    cursor: isProcessing ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  {isProcessing ? (
-                    <>
-                      <div style={{
-                        width: '16px',
-                        height: '16px',
-                        border: '2px solid #ffffff',
-                        borderTop: '2px solid transparent',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                      {isSessionActive ? 'جاري الإيقاف...' : 'جاري البدء...'}
-                    </>
-                  ) : (
-                    <>
-                      <IconScale size={16} />
-                      {isSessionActive ? 'إيقاف الاستلام' : 'بدء الاستلام'}
-                    </>
-                  )}
-                </button>
               </div>
             ) : (
               // Original B2C/B2X Interface
@@ -316,7 +313,7 @@ const TankReceivingModal = ({
                   }}>
                     <IconScale size={20} style={{ color: '#0369a1' }} />
                     <span style={{ fontSize: '14px', fontWeight: '500', color: '#0369a1' }}>
-                      الخزان المحدد: {receivingState.tankReceiving.selectedTankId}
+                      نقل إلى الخزان
                     </span>
                   </div>
                   <p style={{
@@ -325,177 +322,112 @@ const TankReceivingModal = ({
                     margin: 0,
                     lineHeight: '1.5'
                   }}>
-                    سيتم نقل {receivingState.inventory.outsideTanksKg} كجم من منطقة خارج الخزانات إلى الخزان.
+                    اختر الكمية المراد نقلها إلى الخزان المحدد.
                   </p>
                 </div>
 
-                <button
-                  onClick={handleTankSelection}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    background: '#0369a1',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '6px',
+                <div>
+                  <label style={{
+                    display: 'block',
                     fontSize: '14px',
                     fontWeight: '500',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}
-                >
-                  <IconScale size={16} />
-                  {isB2B ? 'اختيار الخزان' : 'بدء وزن الخزان'}
-                </button>
+                    color: '#374151',
+                    marginBottom: '8px'
+                  }}>
+                    الكمية المراد نقلها (كجم):
+                  </label>
+                  <input
+                    type="number"
+                    value={transferAmount}
+                    onChange={(e) => setTransferAmount(Number(e.target.value))}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      textAlign: 'start'
+                    }}
+                    min="0"
+                    max={receivingState.inventory.outsideTanksKg || 0}
+                    step="0.1"
+                  />
+                  <p style={{
+                    fontSize: '12px',
+                    color: '#6b7280',
+                    margin: '4px 0 0 0'
+                  }}>
+                    الحد الأقصى: {receivingState.inventory.outsideTanksKg || 0} كجم
+                  </p>
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {step === 'tank-selection' && isB2B && (
-          <div>
+        {step === 'weighing_in_progress' && (
+          <div style={{ textAlign: 'center' }}>
             <div style={{
-              background: '#f0f9ff',
-              padding: '16px',
-              borderRadius: '8px',
+              background: '#f3e8ff',
+              padding: '20px',
+              borderRadius: '12px',
               marginBottom: '20px',
-              border: '1px solid #0369a1'
+              border: '2px solid #9333ea'
             }}>
               <h4 style={{
-                fontSize: '14px',
-                fontWeight: '500',
-                color: '#0369a1',
-                marginBottom: '12px'
+                fontSize: '18px',
+                fontWeight: '600',
+                color: '#9333ea',
+                marginBottom: '16px'
               }}>
-                اختيار الخزان وكمية النقل:
+                جاري استلام في الخزان
               </h4>
-              
-              {/* Tank Selection */}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#374151',
-                  marginBottom: '8px'
-                }}>
-                  الخزان المستهدف:
-                </label>
-                <select
-                  value={selectedTank}
-                  onChange={(e) => setSelectedTank(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    background: '#ffffff'
-                  }}
-                >
-                  {availableTanks.map(tank => (
-                    <option key={tank} value={tank}>{tank}</option>
-                  ))}
-                </select>
+              <div style={{
+                fontSize: '28px',
+                fontWeight: '700',
+                marginBottom: '8px',
+                fontFamily: 'monospace',
+                background: '#000',
+                color: '#00ff00',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '2px solid #333'
+              }}>
+                {currentTankReading.toLocaleString()} كجم
               </div>
-
-              {/* Transfer Amount */}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{
-                  display: 'block',
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginTop: '12px'
+              }}>
+                {isTankScaleActive && (
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    border: '3px solid #e5e7eb',
+                    borderTop: '3px solid #9333ea',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                )}
+                <span style={{
                   fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#374151',
-                  marginBottom: '8px'
+                  color: isTankScaleActive ? '#9333ea' : '#059669',
+                  fontWeight: '500'
                 }}>
-                  كمية النقل (كجم):
-                </label>
-                <input
-                  type="number"
-                  value={transferAmount}
-                  onChange={(e) => setTransferAmount(Math.min(Number(e.target.value), receivingState.inventory.outsideTanksKg))}
-                  max={receivingState.inventory.outsideTanksKg}
-                  min={0}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
-                    fontSize: '14px'
-                  }}
-                />
-                <p style={{
-                  fontSize: '12px',
-                  color: '#6b7280',
-                  margin: '4px 0 0 0'
-                }}>
-                  المتاح للنقل: {receivingState.inventory.outsideTanksKg} كجم
-                </p>
+                  {isTankScaleActive ? 'جاري التفريغ في الخزان...' : 'اكتمل التفريغ'}
+                </span>
               </div>
-
-              {/* Remainder Info */}
-              {(receivingState.inventory.outsideTanksKg - transferAmount) > 0 && (
-                <div style={{
-                  background: '#fef3c7',
-                  padding: '12px',
-                  borderRadius: '6px',
-                  border: '1px solid #f59e0b'
-                }}>
-                  <p style={{
-                    fontSize: '13px',
-                    color: '#92400e',
-                    margin: 0
-                  }}>
-                    سيتبقى {receivingState.inventory.outsideTanksKg - transferAmount} كجم خارج الخزانات لمعالجة لاحقة
-                  </p>
-                </div>
-              )}
             </div>
-
-            <div style={{
-              display: 'flex',
-              gap: '12px',
-              justifyContent: 'flex-end'
+            <p style={{
+              fontSize: '14px',
+              color: '#6b7280',
+              margin: 0
             }}>
-              <button
-                onClick={() => setStep('start')}
-                style={{
-                  padding: '10px 20px',
-                  background: '#f3f4f6',
-                  color: '#374151',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer'
-                }}
-              >
-                رجوع
-              </button>
-              <button
-                onClick={handleStartWeighing}
-                disabled={transferAmount <= 0}
-                style={{
-                  padding: '10px 20px',
-                  background: transferAmount <= 0 ? '#9ca3af' : '#0369a1',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: transferAmount <= 0 ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <IconScale size={16} />
-                بدء وزن الخزان
-              </button>
-            </div>
+              يرجى الانتظار حتى اكتمال عملية التفريغ في الخزان
+            </p>
           </div>
         )}
 
@@ -528,6 +460,89 @@ const TankReceivingModal = ({
           </div>
         )}
 
+        {step === 'complete' && pendingTankWeights && (
+          <div>
+            <div style={{
+              background: '#f0fdf4',
+              padding: '16px',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              border: '1px solid #059669'
+            }}>
+              <h4 style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#059669',
+                marginBottom: '12px'
+              }}>
+                مراجعة عملية الاستلام في الخزان
+              </h4>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between'
+                }}>
+                  <span style={{ fontSize: '14px', color: '#6b7280' }}>الخزان:</span>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
+                    {selectedTank}
+                  </span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between'
+                }}>
+                  <span style={{ fontSize: '14px', color: '#6b7280' }}>وزن البداية:</span>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
+                    {pendingTankWeights.startWeight.toLocaleString()} كجم
+                  </span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between'
+                }}>
+                  <span style={{ fontSize: '14px', color: '#6b7280' }}>وزن النهاية:</span>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>
+                    {pendingTankWeights.endWeight.toLocaleString()} كجم
+                  </span>
+                </div>
+                <Separator />
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#059669' }}>الكمية المستلمة:</span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#059669' }}>
+                    {pendingTankWeights.netWeight.toLocaleString()} كجم
+                  </span>
+                </div>
+                {(availableQuantity - pendingTankWeights.netWeight) > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between'
+                  }}>
+                    <span style={{ fontSize: '14px', color: '#6b7280' }}>الكمية المتبقية:</span>
+                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#d97706' }}>
+                      {(availableQuantity - pendingTankWeights.netWeight).toLocaleString()} كجم
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <p style={{
+              fontSize: '14px',
+              color: '#6b7280',
+              margin: 0,
+              textAlign: 'center'
+            }}>
+              هل تريد تأكيد هذه النتائج أم إعادة العملية؟
+            </p>
+          </div>
+        )}
+
         {step === 'complete' && weights && (
           <div>
             <div style={{
@@ -543,7 +558,7 @@ const TankReceivingModal = ({
                 color: '#059669',
                 marginBottom: '12px'
               }}>
-                {isB2B ? `نتائج النقل إلى ${selectedTank}:` : 'نتائج الوزن:'}
+                نتائج النقل إلى {selectedTank}:
               </h4>
               <div style={{
                 display: 'flex',
@@ -578,85 +593,208 @@ const TankReceivingModal = ({
                     {weights.netWeight.toLocaleString()} كجم
                   </span>
                 </div>
-                {isB2B && (receivingState.inventory.outsideTanksKg - transferAmount) > 0 && (
-                  <>
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between'
-                    }}>
-                      <span style={{ fontSize: '14px', color: '#d97706' }}>الكمية المتبقية:</span>
-                      <span style={{ fontSize: '14px', fontWeight: '500', color: '#d97706' }}>
-                        {(receivingState.inventory.outsideTanksKg - transferAmount).toLocaleString()} كجم
-                      </span>
-                    </div>
-                  </>
-                )}
               </div>
-            </div>
-
-            <div style={{
-              display: 'flex',
-              gap: '12px',
-              justifyContent: 'flex-end'
-            }}>
-              <button
-                onClick={onClose}
-                style={{
-                  padding: '10px 20px',
-                  background: '#f3f4f6',
-                  color: '#374151',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer'
-                }}
-                disabled={isProcessing}
-              >
-                إلغاء
-              </button>
-              <button
-                onClick={handleConfirmTransfer}
-                disabled={isProcessing}
-                style={{
-                  padding: '10px 20px',
-                  background: isProcessing ? '#9ca3af' : '#059669',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: isProcessing ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                {isProcessing ? (
-                  <>
-                    <div style={{
-                      width: '16px',
-                      height: '16px',
-                      border: '2px solid #ffffff',
-                      borderTop: '2px solid transparent',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }} />
-                    جاري التأكيد...
-                  </>
-                ) : (
-                  <>
-                    <IconCheck size={16} />
-                    تأكيد النقل
-                  </>
-                )}
-              </button>
             </div>
           </div>
         )}
+
+        {/* Buttons */}
+        <div style={{
+          display: 'flex',
+          gap: '12px',
+          justifyContent: 'flex-end',
+          marginTop: '20px'
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '10px 20px',
+              background: '#f3f4f6',
+              color: '#374151',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer'
+            }}
+            disabled={isProcessing}
+          >
+            إلغاء
+          </button>
+          
+          {isB2B ? (
+            // B2B Buttons
+            <>
+              {step === 'start' && availableQuantity > 0 && (
+                <button
+                  onClick={handleB2BStartReceiving}
+                  disabled={isProcessing}
+                  style={{
+                    padding: '10px 20px',
+                    background: isProcessing ? '#9ca3af' : '#9333ea',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: isProcessing ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {isProcessing ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid #ffffff',
+                        borderTop: '2px solid transparent',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                      جاري البدء...
+                    </>
+                  ) : (
+                    <>
+                      <IconScale size={16} />
+                      بدء استلام في الخزان
+                    </>
+                  )}
+                </button>
+              )}
+
+              {step === 'complete' && pendingTankWeights && (
+                <>
+                  <button
+                    onClick={redoTankReceiving}
+                    disabled={isProcessing}
+                    style={{
+                      padding: '10px 20px',
+                      background: '#f3f4f6',
+                      color: '#374151',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: isProcessing ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <IconScale size={16} />
+                    إعادة العملية
+                  </button>
+                  <button
+                    onClick={confirmTankReceiving}
+                    disabled={isProcessing}
+                    style={{
+                      padding: '10px 20px',
+                      background: isProcessing ? '#9ca3af' : '#059669',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: isProcessing ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <div style={{
+                          width: '16px',
+                          height: '16px',
+                          border: '2px solid #ffffff',
+                          borderTop: '2px solid transparent',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }} />
+                        جاري التأكيد...
+                      </>
+                    ) : (
+                      <>
+                        <IconCheck size={16} />
+                        تأكيد الاستلام
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
+            </>
+          ) : (
+            // Original B2C/B2X Buttons
+            <>
+              {step === 'start' && (
+                <button
+                  onClick={handleStartTransfer}
+                  disabled={isProcessing || transferAmount <= 0}
+                  style={{
+                    padding: '10px 20px',
+                    background: (isProcessing || transferAmount <= 0) ? '#9ca3af' : '#0369a1',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: (isProcessing || transferAmount <= 0) ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <IconScale size={16} />
+                  بدء النقل
+                </button>
+              )}
+              
+              {step === 'complete' && weights && (
+                <button
+                  onClick={handleConfirmTransfer}
+                  disabled={isProcessing}
+                  style={{
+                    padding: '10px 20px',
+                    background: isProcessing ? '#9ca3af' : '#059669',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: isProcessing ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {isProcessing ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid #ffffff',
+                        borderTop: '2px solid transparent',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                      جاري التأكيد...
+                    </>
+                  ) : (
+                    <>
+                      <IconCheck size={16} />
+                      تأكيد النقل
+                    </>
+                  )}
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
-export default TankReceivingModal; 
+export default TankReceivingModal;

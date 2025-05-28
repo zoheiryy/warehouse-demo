@@ -22,10 +22,14 @@ const SendReceivePage = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Get or initialize receiving state for a specific trip
-  const getTripReceivingState = (trip) => {
-    if (!tripStates.has(trip.id)) {
-      const workflowType = getWorkflowType(trip);
+  // Initialize trip state when a trip is selected
+  useEffect(() => {
+    if (selectedTrip && !tripStates.has(selectedTrip.id)) {
+      console.log('Initializing trip state for:', selectedTrip.id, 'with quantityKg:', selectedTrip.quantityKg, 'expectedQuantity:', selectedTrip.expectedQuantity);
+      const workflowType = getWorkflowType(selectedTrip);
+      const withCollectorKg = selectedTrip.quantityKg || selectedTrip.expectedQuantity || 0;
+      console.log('Setting withCollectorKg to:', withCollectorKg);
+      
       const initialState = {
         // Module 1: Collector Receiving
         collectorReceiving: {
@@ -46,7 +50,7 @@ const SendReceivePage = () => {
         },
         // Inventory tracking
         inventory: {
-          withCollectorKg: trip.quantityKg || trip.expectedQuantity || 0,
+          withCollectorKg: withCollectorKg,
           outsideTanksKg: 0,
           insideTanksKg: 0
         },
@@ -74,10 +78,21 @@ const SendReceivePage = () => {
         showTankModal: false
       };
       
-      setTripStates(prev => new Map(prev.set(trip.id, initialState)));
-      return initialState;
+      setTripStates(prev => new Map(prev.set(selectedTrip.id, initialState)));
     }
-    return tripStates.get(trip.id);
+  }, [selectedTrip]);
+
+  // Get receiving state for a specific trip (initialization handled by useEffect)
+  const getTripReceivingState = (trip) => {
+    // Return existing state or a default state if not yet initialized
+    return tripStates.get(trip.id) || {
+      collectorReceiving: { status: 'لم تبدأ', auditedQuantityKg: null, completedAt: null, operator: null, vehicleWeights: null },
+      tankReceiving: { status: 'لم تبدأ', selectedTankId: 'B2C_Receiving_Tank_1', startWeight: null, endWeight: null, netWeight: null, completedAt: null },
+      inventory: { withCollectorKg: trip.quantityKg || trip.expectedQuantity || 0, outsideTanksKg: 0, insideTanksKg: 0 },
+      b2bState: { totalFromCollector: 0, cycleCount: 0, transferHistory: [], firstVehicleWeight: null, secondVehicleWeight: null, userChoice: null, tankReceivingSession: { isActive: false, startWeight: null, endWeight: null, quantityReceived: 0, startTime: null, endTime: null }, workflowStep: 'first_weighing' },
+      showCollectorModal: false,
+      showTankModal: false
+    };
   };
 
   // Update receiving state for a specific trip
